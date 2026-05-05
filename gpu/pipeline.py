@@ -9,6 +9,7 @@ import time
 from core.config import SimulationConfig
 from core.constants import MAX_SUBSTEPS, RULE_STRIDE, TEMP_AMBIENT
 from gpu.buffers import BufferManager
+from gpu.sparse_mask import SparseMask
 from gpu.uniforms import (
     UBOManager,
     SimConfigData,
@@ -58,29 +59,34 @@ class Pipeline:
         ubo_manager: UBOManager,
         config: SimulationConfig,
         shaders: dict[str, moderngl.ComputeShader],
-        grid_size: tuple[int, int],
+        context: moderngl.Context,
     ):
         self.ctx = ctx
         self.buffers = buffers
         self.ubo_manager = ubo_manager
+        self.ctx = context
         self.config = config
-        self.width, self.height = grid_size
-
-        self.set_shaders(shaders)
-
-        # Ceil-dispatch so edges are always covered
-        self.gx = (self.width + 15) // 16
-        self.gy = (self.height + 15) // 16
-
-        # Display blit program
-        self._build_display_program()
+        self.width = config.width
+        self.height = config.height
+        self.gx = (self.width + 31) // 32
+        self.gy = (self.height + 31) // 32
+        self.profiler = PassProfiler()
+        self.frame = 0
         self.last_step_ms = 0.0
         self.last_render_ms = 0.0
+        self.adaptive_quality = False  # Adaptive pass skipping enabled
+        self.budget_ms = 1000.0 / 60.0  # 16.67ms for 60fps
         self._frame = 0
+        # Quality tier state (v7 foundation)
+        self.quality_tier_index = 0  # 0=high, 1=medium, 2=low
+        self.fps_history = []  # FPS history for monitoring
+        # Sparse region optimization (v7 foundation)
+        self.sparse_mask = SparseMask(self.width, self.height)
         self.step_passes: tuple[ComputePass, ...] = default_step_passes()
         self.render_passes: tuple[ComputePass, ...] = default_render_passes()
         self.profiler = PassProfiler()
 
+        # Ceil-dispatch so edges are always covered
         # Bind UBOs once at initialization
         self.ubo_manager.bind_all()
 
@@ -232,6 +238,79 @@ class Pipeline:
         adaptive_substeps = int(np.ceil(dt_scale))
         return min(MAX_SUBSTEPS, max(base_substeps, adaptive_substeps))
 
+    def _should_skip_pass(self, pass_name: str, dt: float) -> bool:
+        """Skip optional passes if frame budget exceeded."""
+        if not self.adaptive_quality:
+            return False
+        
+        budget_ms = self.budget_ms
+        elapsed = self.profiler.total_step_ms()
+        
+        # Pass priority mapping (higher = more important)
+        priority = {
+            "biology": 1,
+            "weather": 1,
+            "electricity": 2,
+            "electricity_arc": 2,
+            "acoustic_pressure": 3,
+            "acoustic_velocity": 3,
+            "vorticity": 4,
+            "heat": 4,
+        }
+        
+        pass_priority = priority.get(pass_name, 0)
+        
+        # Skip non-critical optional passes if over budget
+        if elapsed > budget_ms * 0.9:
+            # Only skip low-priority passes
+            if pass_priority <= 1:
+                return True
+        elif elapsed > budget_ms * 0.8:
+            # Skip lowest priority passes
+            if pass_priority <= 0:
+                return True
+        return False
+
+    def update_quality_tier(self, fps: float) -> None:
+        """Auto-adjust quality tier based on FPS."""
+        if not self.config.adaptive_quality:
+            return
+        
+        # Update FPS history
+        self.fps_history.append(fps)
+        if len(self.fps_history) > 60:
+            self.fps_history.pop(0)
+        
+        # Only adjust after we have enough samples
+        if len(self.fps_history) < 30:
+            return
+        
+        avg_fps = sum(self.fps_history) / len(self.fps_history)
+        min_fps = self.config.min_fps_target
+        
+        # Downgrade if FPS is too low for sustained period
+        if avg_fps < min_fps * 0.9 and self.quality_tier_index < 2:
+            self.quality_tier_index += 1
+            self._apply_quality_tier()
+            self.fps_history.clear()  # Reset history after adjustment
+        
+        # Upgrade if FPS is consistently high
+        elif avg_fps > min_fps * 1.2 and self.quality_tier_index > 0:
+            self.quality_tier_index -= 1
+            self._apply_quality_tier()
+            self.fps_history.clear()  # Reset history after adjustment
+
+    def _apply_quality_tier(self) -> None:
+        """Apply current quality tier settings."""
+        tier = self.config.quality_tiers[self.quality_tier_index]
+        self.config.pressure_iterations = tier["pressure_iterations"]
+        self.config.acoustic_substeps = tier["acoustic_substeps"]
+        self.config.bloom_enabled = tier["bloom_enabled"]
+
+    def enable_sparse_mode(self, enabled: bool) -> None:
+        """Enable or disable sparse region optimization."""
+        self.sparse_mask.enable_sparse(enabled)
+
     # ── Multi-pass pipeline ──────────────────────────────────────────────────
 
     def step(
@@ -245,6 +324,12 @@ class Pipeline:
         """Run one frame of the GPU simulation pipeline."""
         start = time.perf_counter()
         self._update_ubos(dt, frame, explosion_state, explosion_vfx_state, wind_state)
+        
+        # Update sparse mask if enabled
+        if self.sparse_mask.sparse_enabled:
+            cells = self.buffers.cells_read.read()
+            self.sparse_mask.update_mask(cells)
+        
         self._step_multi_pass(dt, explosion_state, wind_state)
         self.last_step_ms = (time.perf_counter() - start) * 1000.0
 
@@ -356,14 +441,14 @@ class Pipeline:
             self.buffers.swap_velocity_buffers()
 
             # 9. Electricity propagation
-            if not getattr(self.config, "no_electricity", True):
+            if self.config.enable_electricity:
                 self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
                 self.buffers.charge_a.bind_to_image(IMAGE_CHARGE_IN, read=True, write=False, level=0, format=_FMT_R32F)
                 self.buffers.charge_b.bind_to_image(IMAGE_CHARGE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
                 self._set_common_uniforms(self.electricity_shader)
                 self._set_if(self.electricity_shader, "dt", dt)
-                self._set_if(self.electricity_shader, "chargeDecay", getattr(self.config, "charge_decay", 0.0))
-                self._set_if(self.electricity_shader, "maxCharge", getattr(self.config, "max_charge", 1000.0))
+                self._set_if(self.electricity_shader, "chargeDecay", self.config.charge_decay)
+                self._set_if(self.electricity_shader, "maxCharge", self.config.max_charge)
                 self._timed_run("electricity", self.electricity_shader, group_x=self.gx, group_y=self.gy, group_z=1)
                 self.ctx.memory_barrier()
                 self.buffers.swap_charge_buffers()
@@ -377,16 +462,16 @@ class Pipeline:
                 self.buffers.div_tex.bind_to_image(IMAGE_DIVERGENCE, read=False, write=True, level=0, format=_FMT_R32F)
                 self._set_common_uniforms(self.electricity_arc_shader)
                 self._set_if(self.electricity_arc_shader, "dt", dt)
-                self._set_if(self.electricity_arc_shader, "breakdownThreshold", getattr(self.config, "breakdown_threshold", 500.0))
-                self._set_if(self.electricity_arc_shader, "arcTempDelta", getattr(self.config, "arc_temp_delta", 200.0))
-                self._set_if(self.electricity_arc_shader, "arcPressurePulse", getattr(self.config, "arc_pressure_pulse", 5.0))
+                self._set_if(self.electricity_arc_shader, "breakdownThreshold", self.config.breakdown_threshold)
+                self._set_if(self.electricity_arc_shader, "arcTempDelta", self.config.arc_temp_delta)
+                self._set_if(self.electricity_arc_shader, "arcPressurePulse", self.config.arc_pressure_pulse)
                 self._timed_run("electricity_arc", self.electricity_arc_shader, group_x=self.gx, group_y=self.gy, group_z=1)
                 self.ctx.memory_barrier()
                 self.buffers.swap_charge_buffers()
                 self.buffers.swap_temp_buffers()
 
             # 10. Biology / ecology
-            if not getattr(self.config, "no_biology", True):
+            if self.config.enable_biology and not self._should_skip_pass("biology", dt):
                 self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
                 self.buffers.nutrient_a.bind_to_image(IMAGE_NUTRIENT_IN, read=True, write=False, level=0, format=_FMT_R32F)
                 self.buffers.nutrient_b.bind_to_image(IMAGE_NUTRIENT_OUT, read=False, write=True, level=0, format=_FMT_R32F)
@@ -395,11 +480,11 @@ class Pipeline:
                 self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
                 self._set_common_uniforms(self.biology_shader)
                 self._set_if(self.biology_shader, "dt", dt)
-                self._set_if(self.biology_shader, "nutrientDiffuseRate", getattr(self.config, "nutrient_diffuse_rate", 0.5))
-                self._set_if(self.biology_shader, "moistureDiffuseRate", getattr(self.config, "moisture_diffuse_rate", 0.3))
+                self._set_if(self.biology_shader, "nutrientDiffuseRate", self.config.nutrient_diffuse_rate)
+                self._set_if(self.biology_shader, "moistureDiffuseRate", self.config.moisture_diffuse_rate)
                 self._set_if(self.biology_shader, "moistureEvapRate", getattr(self.config, "moisture_evap_rate", 0.02))
-                self._set_if(self.biology_shader, "growthRate", getattr(self.config, "growth_rate", 0.1))
-                self._set_if(self.biology_shader, "decayRate", getattr(self.config, "decay_rate", 0.05))
+                self._set_if(self.biology_shader, "growthRate", self.config.growth_rate)
+                self._set_if(self.biology_shader, "decayRate", self.config.decay_rate)
                 self._set_if(self.biology_shader, "nutrientConsumeRate", getattr(self.config, "nutrient_consume_rate", 0.2))
                 self._set_if(self.biology_shader, "moistureConsumeRate", getattr(self.config, "moisture_consume_rate", 0.15))
                 self._set_if(self.biology_shader, "waterMoistureBoost", getattr(self.config, "water_moisture_boost", 5.0))
@@ -410,18 +495,19 @@ class Pipeline:
                 self.buffers.swap_moisture_buffers()
 
             # 11. Weather / atmospheric
-            if not getattr(self.config, "no_weather", True):
+            if self.config.enable_weather and not self._should_skip_pass("weather", dt):
                 self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
                 self.buffers.humidity_a.bind_to_image(IMAGE_HUMIDITY_IN, read=True, write=False, level=0, format=_FMT_R32F)
                 self.buffers.humidity_b.bind_to_image(IMAGE_HUMIDITY_OUT, read=False, write=True, level=0, format=_FMT_R32F)
                 self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
                 self._set_common_uniforms(self.weather_shader)
                 self._set_if(self.weather_shader, "dt", dt)
-                self._set_if(self.weather_shader, "humidityDiffuseRate", getattr(self.config, "humidity_diffuse_rate", 0.4))
-                self._set_if(self.weather_shader, "evaporationRate", getattr(self.config, "evaporation_rate", 0.1))
-                self._set_if(self.weather_shader, "condensationRate", getattr(self.config, "condensation_rate", 0.3))
-                self._set_if(self.weather_shader, "saturationThreshold", getattr(self.config, "saturation_threshold", 100.0))
-                self._set_if(self.weather_shader, "rainSpeed", getattr(self.config, "rain_speed", 2.0))
+                self._set_if(self.weather_shader, "humidityDiffuseRate", self.config.humidity_diffuse_rate)
+                self._set_if(self.weather_shader, "evaporationRate", self.config.evaporation_rate)
+                self._set_if(self.weather_shader, "condensationRate", self.config.condensation_rate)
+                self._set_if(self.weather_shader, "saturationThreshold", self.config.saturation_threshold)
+                self._set_if(self.weather_shader, "rainSpeed", self.config.rain_speed)
+                self._set_if(self.weather_shader, "transpirationRate", self.config.transpiration_rate)
                 self._set_if(self.weather_shader, "windAdvectStrength", getattr(self.config, "wind_advect_strength", 0.5))
                 self._set_if(self.weather_shader, "windVector", getattr(self.config, "wind_vector", (0.0, 0.0)))
                 self._timed_run("weather", self.weather_shader, group_x=self.gx, group_y=self.gy, group_z=1)
@@ -494,7 +580,8 @@ class Pipeline:
             self.buffers.display_texture.bind_to_image(IMAGE_DISPLAY, read=True, write=False, level=0, format=_FMT_RGBA8)
             self.buffers.bloom_a.bind_to_image(IMAGE_BLOOM_A, read=False, write=True, level=0, format=_FMT_RGBA8)
             self._set_common_uniforms(self.bloom_extract_shader)
-            self._set_if(self.bloom_extract_shader, "bloomThreshold", getattr(self.config, "bloom_threshold", 0.6))
+            self._set_if(self.bloom_extract_shader, "bloomThreshold", self.config.bloom_threshold)
+            self._set_if(self.bloom_extract_shader, "bloomIntensity", self.config.bloom_intensity)
             self._timed_run("bloom_extract", self.bloom_extract_shader,
                             group_x=max(1, (self.width + 31) // 32),
                             group_y=max(1, (self.height + 31) // 32), group_z=1)
@@ -505,6 +592,10 @@ class Pipeline:
             self.buffers.bloom_b.bind_to_image(IMAGE_BLOOM_B, read=False, write=True, level=0, format=_FMT_RGBA8)
             self._set_common_uniforms(self.bloom_blur_shader)
             self._set_if(self.bloom_blur_shader, "blurDirection", 0)
+            self._set_if(self.bloom_blur_shader, "blurRadius", self.config.bloom_radius)
+            # Map quality string to sample count
+            blur_samples = 5 if self.config.bloom_quality == "high" else (3 if self.config.bloom_quality == "medium" else 1)
+            self._set_if(self.bloom_blur_shader, "blurSamples", blur_samples)
             self._timed_run("bloom_blur_h", self.bloom_blur_shader,
                             group_x=max(1, (self.width + 31) // 32),
                             group_y=max(1, (self.height + 31) // 32), group_z=1)
@@ -514,6 +605,8 @@ class Pipeline:
             self.buffers.bloom_b.bind_to_image(IMAGE_BLOOM_A, read=True, write=False, level=0, format=_FMT_RGBA8)
             self.buffers.bloom_a.bind_to_image(IMAGE_BLOOM_B, read=False, write=True, level=0, format=_FMT_RGBA8)
             self._set_if(self.bloom_blur_shader, "blurDirection", 1)
+            self._set_if(self.bloom_blur_shader, "blurRadius", self.config.bloom_radius)
+            self._set_if(self.bloom_blur_shader, "blurSamples", blur_samples)
             self._timed_run("bloom_blur_v", self.bloom_blur_shader,
                             group_x=max(1, (self.width + 31) // 32),
                             group_y=max(1, (self.height + 31) // 32), group_z=1)

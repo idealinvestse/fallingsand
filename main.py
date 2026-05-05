@@ -20,27 +20,29 @@ from pygame.locals import (
     K_4,
     K_c,
     K_DOWN,
+    K_e,
     K_ESCAPE,
     K_F12,
     K_h,
     K_i,
     K_LEFT,
     K_LEFTBRACKET,
+    K_p,
+    K_q,
+    K_r,
     K_RIGHT,
     K_RIGHTBRACKET,
     K_RETURN,
+    K_s,
     K_UP,
     K_v,
     K_w,
     K_x,
     K_l,
-    K_p,
-    K_q,
-    K_r,
-    K_s,
     K_TAB,
     K_z,
     MOUSEBUTTONDOWN,
+    MOUSEBUTTONUP,
     MOUSEWHEEL,
     QUIT,
 )
@@ -52,8 +54,11 @@ from gpu.context import ContextManager
 from levels import get_custom_store, get_level_by_id
 from simulation.engine import SimulationEngine
 from hud import HUD
-from ui import KeybindOverlay, PauseMenu, SfxManager, InspectorPanel
+from ui import KeybindOverlay, PauseMenu, SfxManager
+from ui.inspector import InspectorPanel
 from ui.overlay import OverlayRenderer
+from ui.system_controls import SystemControls
+from ui.performance_overlay import PerformanceOverlay
 import ui.theme as theme
 
 
@@ -91,6 +96,42 @@ def parse_arguments() -> argparse.Namespace:
     # Bloom post-FX flags
     parser.add_argument("--no-bloom", action="store_true", help="Disable bloom post-processing")
     parser.add_argument("--bloom-threshold", type=float, default=0.6, help="Bloom luminance threshold (0.0-1.0)")
+    # Save format
+    parser.add_argument("--save-format", choices=("v7", "v8"), default="v7", help="Save file format (v7 or v8)")
+    # New system flags
+    parser.add_argument("--enable-electricity", action="store_true", default=False, help="Enable electricity system")
+    parser.add_argument("--enable-biology", action="store_true", default=False, help="Enable biology/ecology system")
+    parser.add_argument("--enable-weather", action="store_true", default=False, help="Enable weather/atmospheric system")
+    
+    # Electricity parameters
+    parser.add_argument("--charge-decay", type=float, default=0.0, help="Electricity charge decay rate")
+    parser.add_argument("--max-charge", type=float, default=1000.0, help="Maximum charge capacity")
+    parser.add_argument("--breakdown-threshold", type=float, default=500.0, help="Arc breakdown threshold")
+    parser.add_argument("--arc-temp-delta", type=float, default=200.0, help="Temperature increase from arcs")
+    parser.add_argument("--arc-pressure-pulse", type=float, default=5.0, help="Pressure pulse from arcs")
+    
+    # Biology parameters
+    parser.add_argument("--nutrient-diffuse-rate", type=float, default=0.5, help="Nutrient diffusion rate")
+    parser.add_argument("--moisture-diffuse-rate", type=float, default=0.3, help="Moisture diffusion rate")
+    parser.add_argument("--growth-rate", type=float, default=0.1, help="Bio material growth rate")
+    parser.add_argument("--decay-rate", type=float, default=0.05, help="Bio material decay rate")
+    
+    # Weather parameters
+    parser.add_argument("--humidity-diffuse-rate", type=float, default=0.4, help="Humidity diffusion rate")
+    parser.add_argument("--evaporation-rate", type=float, default=0.1, help="Water evaporation rate")
+    parser.add_argument("--condensation-rate", type=float, default=0.3, help="Humidity condensation rate")
+    parser.add_argument("--saturation-threshold", type=float, default=100.0, help="Humidity saturation threshold")
+    parser.add_argument("--rain-speed", type=float, default=2.0, help="Rain falling speed")
+    
+    # Bloom parameters
+    parser.add_argument("--bloom-intensity", type=float, default=0.6, help="Bloom intensity multiplier")
+    parser.add_argument("--bloom-radius", type=float, default=1.0, help="Bloom blur radius multiplier")
+    parser.add_argument("--bloom-quality", choices=("low", "medium", "high"), default="medium", help="Bloom quality setting")
+    
+    # Adaptive performance
+    parser.add_argument("--adaptive-quality", action="store_true", default=False, help="Enable adaptive quality scaling")
+    parser.add_argument("--min-fps-target", type=float, default=30.0, help="Minimum FPS target for adaptive quality")
+    parser.add_argument("--transpiration-rate", type=float, default=0.05, help="Bio material transpiration rate")
     return parser.parse_args()
 
 
@@ -137,6 +178,10 @@ def main() -> None:
     # Initialize simulation engine
     engine = SimulationEngine(config, ctx_manager)
 
+    # Set save format from CLI argument
+    save_format = 8 if args.save_format == "v8" else 7
+    engine.persistence.set_save_format(save_format)
+
     # Initialize HUD
     hud = None
     if not config.no_hud:
@@ -151,6 +196,10 @@ def main() -> None:
     sfx = SfxManager()
     inspector = InspectorPanel(ctx_manager.get_context(), (config.window_width, config.window_height))
     intro_overlay = OverlayRenderer(ctx_manager.get_context(), (config.window_width, config.window_height))
+    system_controls = SystemControls(ctx_manager.get_context(), (config.window_width, config.window_height))
+    performance_overlay = PerformanceOverlay(ctx_manager.get_context(), (config.window_width, config.window_height))
+    performance_overlay.set_profiler(engine.pipeline.profiler)
+    performance_overlay.set_pipeline(engine.pipeline)
 
     # Game state
     running = True
@@ -284,6 +333,8 @@ def main() -> None:
                 if action_payload is not None:
                     action, payload = action_payload
                     _run_pause_action(action, payload)
+            elif ev.type == MOUSEBUTTONUP:
+                system_controls.handle_mouse_up()
             elif ev.type == MOUSEWHEEL:
                 if paused:
                     continue
@@ -378,9 +429,27 @@ def main() -> None:
                     view = engine.cycle_debug_view()
                     names = ["off", "pressure", "charge", "nutrient", "moisture", "humidity"]
                     print(f"Debug view: {names[view]}")
+                elif ev.key == K_e and (pygame.key.get_mods() & pygame.KMOD_CTRL):
+                    system_controls.toggle()
+                elif ev.key == K_p and (pygame.key.get_mods() & pygame.KMOD_CTRL):
+                    performance_overlay.toggle()
+                else:
+                    # Pass other keys to system controls if visible
+                    if system_controls.visible:
+                        system_controls.handle_key(ev.key, pygame.key.get_mods())
 
         # Mouse handling
-        if paused:
+        mx, my = pygame.mouse.get_pos()
+        
+        if system_controls.visible:
+            # Handle system controls panel interactions
+            action = system_controls.handle_click(mx, my)
+            if action and action[0] == "update_config":
+                system_controls.get_config_updates(config)
+                if action[1] and "sparse_enabled" in action[1]:
+                    engine.pipeline.enable_sparse_mode(action[1]["sparse_enabled"])
+            system_controls.handle_mouse_move(mx, my)
+        elif paused:
             # Do not paint while paused
             left, _, right = (False, False, False)
             painting_active = False
@@ -435,6 +504,8 @@ def main() -> None:
         # Step simulation
         if not paused:
             engine.step(dt)
+            performance_overlay.update_fps(dt)
+            engine.pipeline.update_quality_tier(performance_overlay.current_fps)
 
         # Render
         engine.render()
@@ -445,6 +516,12 @@ def main() -> None:
 
         # Render inspector
         inspector.render()
+
+        # Render system controls
+        system_controls.render()
+
+        # Render performance overlay
+        performance_overlay.render()
 
         keybind_overlay.render()
         pause_menu.render(

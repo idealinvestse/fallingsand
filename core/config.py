@@ -1,7 +1,7 @@
 """Configuration management for the simulation."""
 
 import argparse
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(slots=True)
@@ -42,6 +42,38 @@ class SimulationConfig:
     # Post-FX settings
     bloom_enabled: bool = True
     bloom_threshold: float = 0.6
+    bloom_intensity: float = 0.6
+    bloom_radius: float = 1.0
+    bloom_quality: str = "medium"
+
+    # New system settings (Phase 1)
+    enable_electricity: bool = False
+    enable_biology: bool = False
+    enable_weather: bool = False
+    charge_decay: float = 0.0
+    max_charge: float = 1000.0
+    breakdown_threshold: float = 500.0
+    arc_temp_delta: float = 200.0
+    arc_pressure_pulse: float = 5.0
+    nutrient_diffuse_rate: float = 0.5
+    moisture_diffuse_rate: float = 0.3
+    growth_rate: float = 0.1
+    decay_rate: float = 0.05
+    humidity_diffuse_rate: float = 0.4
+    evaporation_rate: float = 0.1
+    condensation_rate: float = 0.3
+    saturation_threshold: float = 100.0
+    rain_speed: float = 2.0
+
+    # Dynamic quality scaling (Phase 1)
+    adaptive_quality: bool = False
+    min_fps_target: float = 30.0
+    quality_tiers: list = field(default_factory=lambda: [
+        {"pressure_iterations": 20, "acoustic_substeps": 6, "bloom_enabled": True},
+        {"pressure_iterations": 12, "acoustic_substeps": 4, "bloom_enabled": True},
+        {"pressure_iterations": 8, "acoustic_substeps": 2, "bloom_enabled": False},
+    ])
+    transpiration_rate: float = 0.05
 
     # UI settings
     no_hud: bool = False
@@ -60,21 +92,47 @@ class SimulationConfig:
             no_turbulence=args.no_turbulence,
             no_wet_dry=args.no_wet_dry,
             no_thermal=args.no_thermal,
-            no_hud=args.no_hud,
-            no_stats=args.no_stats,
-            heat_diffusion_iterations=getattr(args, 'heat_diffusion_iterations', 2),
-            use_maccormack=getattr(args, 'use_maccormack', True),
-            powder_friction=getattr(args, 'powder_friction', 0.35),
-            angle_of_repose_deg=getattr(args, 'angle_of_repose_deg', 32.0),
-            capillary_strength=getattr(args, 'capillary_strength', 0.4),
-            wind_field=getattr(args, 'wind_field', 'none'),
-            no_acoustics=getattr(args, 'no_acoustics', False),
-            sound_speed=getattr(args, 'sound_speed', 4.0),
-            acoustic_substeps=getattr(args, 'acoustic_substeps', 6),
-            atm_pressure=getattr(args, 'atm_pressure', 1.0),
-            perf_overlay=getattr(args, 'perf', False),
-            bloom_enabled=not getattr(args, 'no_bloom', False),
-            bloom_threshold=getattr(args, 'bloom_threshold', 0.6),
+            gravity=args.gravity,
+            vorticity_confinement=args.vorticity_confinement,
+            surface_tension=args.surface_tension,
+            thermal_convection=args.thermal_convection,
+            heat_diffusion_iterations=args.heat_diffusion_iterations,
+            use_maccormack=not args.no_maccormack,
+            powder_friction=args.powder_friction,
+            angle_of_repose_deg=args.angle_of_repose_deg,
+            capillary_strength=args.capillary_strength,
+            wind_field=args.wind_field,
+            adaptive_substeps=args.adaptive_substeps,
+            perf_overlay=args.perf,
+            no_acoustics=args.no_acoustics,
+            sound_speed=args.sound_speed,
+            acoustic_substeps=args.acoustic_substeps,
+            atm_pressure=args.atm_pressure,
+            bloom_enabled=not args.no_bloom,
+            bloom_threshold=args.bloom_threshold,
+            bloom_intensity=getattr(args, "bloom_intensity", 0.6),
+            bloom_radius=getattr(args, "bloom_radius", 1.0),
+            bloom_quality=getattr(args, "bloom_quality", "medium"),
+            enable_electricity=getattr(args, "enable_electricity", False),
+            enable_biology=getattr(args, "enable_biology", False),
+            enable_weather=getattr(args, "enable_weather", False),
+            charge_decay=getattr(args, "charge_decay", 0.0),
+            max_charge=getattr(args, "max_charge", 1000.0),
+            breakdown_threshold=getattr(args, "breakdown_threshold", 500.0),
+            arc_temp_delta=getattr(args, "arc_temp_delta", 200.0),
+            arc_pressure_pulse=getattr(args, "arc_pressure_pulse", 5.0),
+            nutrient_diffuse_rate=getattr(args, "nutrient_diffuse_rate", 0.5),
+            moisture_diffuse_rate=getattr(args, "moisture_diffuse_rate", 0.3),
+            growth_rate=getattr(args, "growth_rate", 0.1),
+            decay_rate=getattr(args, "decay_rate", 0.05),
+            humidity_diffuse_rate=getattr(args, "humidity_diffuse_rate", 0.4),
+            evaporation_rate=getattr(args, "evaporation_rate", 0.1),
+            condensation_rate=getattr(args, "condensation_rate", 0.3),
+            saturation_threshold=getattr(args, "saturation_threshold", 100.0),
+            rain_speed=getattr(args, "rain_speed", 2.0),
+            adaptive_quality=getattr(args, "adaptive_quality", False),
+            min_fps_target=getattr(args, "min_fps_target", 30.0),
+            transpiration_rate=getattr(args, "transpiration_rate", 0.05),
         )
 
     def validate(self) -> list[str]:

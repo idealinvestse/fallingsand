@@ -1,14 +1,21 @@
 # Materials
 
-Materials are data-driven and loaded from `simulation/materials.yaml`.
+Materials are data-driven and loaded from `simulation/materials.yaml` (legacy v5) or `simulation/materials_v6.yaml` (v6 schema).
 
 ## Source of Truth
 
+**Legacy v5:**
 - `simulation/materials.yaml`: canonical material definitions.
 - `simulation/yaml_loader.py`: YAML loading and constant resolution.
 - `simulation/materials.py`: registry construction, validation, packing, public accessors.
 - `core/types.py`: `Material`, `Category`, `StateFamily`, and `Cell` dataclasses/enums.
 - `shaders/common.glsl`: shader-side material IDs, cell packing helpers, and rule-buffer unpacking.
+
+**v6 Schema:**
+- `simulation/materials_v6.yaml`: structured material definitions with grouped properties.
+- `simulation/material_schema.py`: v6 schema dataclasses, loading, validation, legacy adapter.
+- `simulation/material_schema.py::to_legacy_defs()`: Converts v6 to legacy format for rule buffer.
+- See `docs/V6_MATERIAL_SCHEMA.md` for complete v6 specification.
 
 ## Material IDs
 
@@ -33,6 +40,16 @@ Layout groups:
 - `26..40`: three reaction slots.
 - `41..46`: explosive properties.
 - `47..48`: oxygen/combustion properties.
+
+**Electrical Properties (slots 13-16):**
+- Slot 13: conductivity (0.0 = insulator, 1.0 = superconductor)
+- Slot 14: capacitance (reserved for future use)
+- Slot 15: breakdown_voltage (arc threshold)
+- Slot 16: arc_emission (visual effect intensity)
+
+**Biology Properties (planned for v7):**
+- To be added to rule buffer slots
+- Will include biomass, growth_rate, decay_rate, nutrient_value
 
 Keep `core/constants.py`, `simulation/materials.py`, and `shaders/common.glsl` synchronized when the schema changes.
 

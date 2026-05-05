@@ -33,6 +33,7 @@ layout(r32f, binding = 14) uniform writeonly image2D nutrientOut;
 layout(r32f, binding = 15) uniform readonly  image2D moistureIn;
 layout(r32f, binding = 16) uniform writeonly image2D moistureOut;
 layout(r32f, binding = 11) uniform readonly  image2D tempIn;
+layout(r32f, binding = 9) uniform readonly  image2D chargeIn;  // Cross-system coupling
 
 uniform uvec2 gridSize;
 uniform uint  ruleStride;
@@ -69,6 +70,7 @@ void main(){
     float nut  = imageLoad(nutrientIn, p).r;
     float moist = imageLoad(moistureIn, p).r;
     float temp  = imageLoad(tempIn, p).r;
+    float charge = imageLoad(chargeIn, p).r;  // Cross-system coupling
 
     // ── Nutrient diffusion (4-neighbor stencil) ──────────────────────────
     float nutSum = 0.0;
@@ -122,11 +124,19 @@ void main(){
 
     // ── Bio growth / decay ───────────────────────────────────────────────
     if(isBio(typ)){
+        // Cross-system coupling: Electric fields affect growth
+        float growthModifier = 1.0;
+        if(abs(charge) > 10.0 && abs(charge) < 100.0) {
+            growthModifier = 1.2;  // Moderate fields stimulate growth (20% boost)
+        } else if(abs(charge) > 500.0) {
+            growthModifier = 0.5;  // Strong fields inhibit growth (50% penalty)
+        }
+
         // Growth: needs nutrients, moisture, and warmth
         bool canGrow = nut > 0.1 && moist > 0.1 && temp > 100.0;
         if(canGrow){
-            nut   -= nutrientConsumeRate * growthRate * dt;
-            moist -= moistureConsumeRate * growthRate * dt;
+            nut   -= nutrientConsumeRate * growthRate * growthModifier * dt;
+            moist -= moistureConsumeRate * growthRate * growthModifier * dt;
         } else {
             // Decay: bio dies without resources, returns nutrients
             nut += decayRate * dt * 0.5;  // half of decay mass becomes nutrients

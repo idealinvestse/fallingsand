@@ -2,6 +2,31 @@
 
 Consolidated implementation history for the Falling Sand simulation.
 
+## v6.0 Final Polish (2026-05)
+
+### Phase 4 — UI & CLI Enhancements
+- **Performance overlay**: Real-time FPS monitoring with Ctrl+P, per-pass timing bars, FPS history graph, budget-exceeded highlighting, and quality tier indicator.
+- **System controls panel**: Real-time parameter tuning for electricity (charge decay, breakdown threshold), biology (growth rate, decay rate), weather (evaporation rate, saturation threshold), and bloom (threshold, intensity, radius, quality).
+- **CLI flags**: Added 20+ new CLI flags for all system parameters including electricity, biology, weather, bloom, and adaptive performance settings.
+- **Transpiration rate**: Added `transpiration_rate` uniform to weather shader for biology → weather coupling.
+
+### Phase 5 — v7 Foundation Features
+- **Quality tier auto-adjustment**: Three-tier system (High/Medium/Low) that automatically adjusts pressure iterations, acoustic substeps, and bloom enabled based on sustained FPS.
+- **Sparse region optimization**: Tracks active (non-air) cells and limits GPU dispatch to bounding boxes, reducing compute for mostly-empty simulations.
+- **Enhanced adaptive pass skipping**: Pass priority system (0-4) for selective skipping of optional passes when frame budget exceeded.
+- **Adaptive quality mode**: Enable via `--adaptive-quality` flag with `--min-fps-target` for automatic quality scaling.
+
+### Phase 6 — Testing & Validation
+- **Integration tests**: Created `tests/test_cross_system_coupling.py` with test cases for electricity → biology, biology → weather, fluid → electricity, and bloom effects.
+- **Performance benchmarks**: Extended `tests/benchmark_performance.py` with 512×512 low-res, adaptive mode, and sparse region benchmarks.
+- **Manual testing checklist**: Created `MANUAL_TESTING_CHECKLIST.md` with comprehensive testing coverage for all new features.
+
+### Phase 7 — Documentation
+- **ADAPTIVE_SIMULATION.md**: New documentation for quality tier system, sparse region optimization, and adaptive pass skipping.
+- **PERFORMANCE.md**: Updated with adaptive simulation details and quality tier information.
+- **GPU_PIPELINE.md**: Updated with sparse region optimization section.
+- **ARCHITECTURE.md**: Updated with performance monitoring section describing performance overlay and adaptive quality.
+
 ## Phase 3 — Rendering (2026-05)
 
 - **Ambient occlusion**: cells below solid surfaces are darkened 25%; stacked solids darken 8% per layer.

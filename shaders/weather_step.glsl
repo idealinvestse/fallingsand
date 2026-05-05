@@ -25,6 +25,8 @@ layout(std430, binding = 0) readonly buffer CellBuffer { uint cells[]; };
 layout(r32f, binding = 17) uniform readonly  image2D humidityIn;
 layout(r32f, binding = 18) uniform writeonly image2D humidityOut;
 layout(r32f, binding = 11) uniform readonly  image2D tempIn;
+layout(r32f, binding = 13) uniform readonly  image2D nutrientIn;  // Cross-system coupling
+layout(r32f, binding = 15) uniform readonly  image2D moistureIn;  // Cross-system coupling
 // Wind texture bound at binding 13 in some configs; we use a dedicated uniform instead
 
 uniform uvec2 gridSize;
@@ -36,6 +38,7 @@ uniform float saturationThreshold;   // humidity level that triggers condensatio
 uniform float rainSpeed;             // downward speed of rain droplets
 uniform float windAdvectStrength;    // how strongly wind pushes humidity
 uniform vec2  windVector;            // global wind direction * strength
+uniform float transpirationRate;     // transpiration rate for bio materials
 
 void main(){
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
@@ -47,6 +50,7 @@ void main(){
 
     float hum  = imageLoad(humidityIn, p).r;
     float temp = imageLoad(tempIn, p).r;
+    float moist = imageLoad(moistureIn, p).r;  // Cross-system coupling
 
     // ── Humidity diffusion (4-neighbor stencil, through air) ─────────────
     float humSum = 0.0;
@@ -80,6 +84,16 @@ void main(){
     if(typ == T_WATER && temp > 100.0){
         float evap = evaporationRate * (temp - 96.0) * 0.01 * dt;
         hum = min(saturationThreshold * 2.0, hum + evap);
+        // Cross-system coupling: Water evaporation increases local conductivity
+        // This could be exposed to electricity pass via a separate conductivity boost texture
+        // For now, the evaporation amount is proportional to potential conductivity boost
+    }
+
+    // Cross-system coupling: Bio transpiration boosts evaporation
+    bool isBio = typ == T_PLANT || typ == T_BLOOD || typ == T_VIRUS || typ == T_SLIME;
+    if(isBio && moist > 0.5 && temp > 100.0){
+        float transpiration = moist * transpirationRate * dt;
+        hum = min(saturationThreshold * 2.0, hum + transpiration);
     }
 
     // ── Condensation: saturated humidity + cool → water droplets ─────────

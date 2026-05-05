@@ -7,6 +7,7 @@ layout(rgba8, binding = 19) uniform writeonly image2D bloomOut;
 
 uniform uvec2 gridSize;       // full resolution
 uniform float bloomThreshold; // luminance threshold (0.0-1.0)
+uniform float bloomIntensity; // bloom intensity multiplier
 
 vec3 rgb_to_luminance(vec3 c) {
     return vec3(0.2126, 0.7152, 0.0722) * c;
@@ -32,6 +33,6 @@ void main() {
     float lum = dot(avg, vec3(0.2126, 0.7152, 0.0722));
     float brightness = max(lum - bloomThreshold, 0.0) / max(1.0 - bloomThreshold, 0.001);
 
-    vec3 bloomColor = avg * brightness;
+    vec3 bloomColor = avg * brightness * bloomIntensity;
     imageStore(bloomOut, p, vec4(bloomColor, 1.0));
 }

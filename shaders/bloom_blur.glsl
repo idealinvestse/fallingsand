@@ -8,6 +8,8 @@ layout(rgba8, binding = 20) uniform writeonly image2D bloomOut;
 
 uniform uvec2 gridSize;       // full resolution (bloom is half)
 uniform int blurDirection;    // 0 = horizontal, 1 = vertical
+uniform float blurRadius;     // Configurable radius multiplier
+uniform int blurSamples;      // Number of samples based on bloom_quality
 
 // 9-tap gaussian kernel (sigma ≈ 2.0)
 const float weights[5] = float[](0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
@@ -21,9 +23,10 @@ void main() {
     vec3 result = center * weights[0];
 
     ivec2 step = (blurDirection == 0) ? ivec2(1, 0) : ivec2(0, 1);
+    int samples = clamp(blurSamples, 1, 5);
 
-    for (int i = 1; i < 5; i++) {
-        ivec2 offset = step * i;
+    for (int i = 1; i < samples; i++) {
+        ivec2 offset = step * int(float(i) * blurRadius);
         ivec2 pos1 = p + offset;
         ivec2 pos2 = p - offset;
 

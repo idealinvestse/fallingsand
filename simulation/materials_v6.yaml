@@ -248,3 +248,102 @@ materials:
       blast_radius: 0
       blast_duration: 0
       shockwave_speed: 0.0
+
+  # Electrical materials (Phase 2 cross-system coupling)
+  10:
+    name: copper
+    display:
+      color: [184, 115, 51]
+      emissive: 0.0
+    physical:
+      category: solid
+      state_family: solid
+      density: 8.9
+      viscosity: 0.0
+      cohesion: 0.8
+      restitution: 0.1
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.95
+      heat_capacity: 0.38
+      cooling_rate: 0.02
+      melting_point: 1085.0
+      boiling_point: 2562.0
+      phase_high:
+        material: lava
+        temp: 1085.0
+      default_flame_temp: 0.0
+      default_flame_life: 0
+    electrical:
+      conductivity: 0.95
+      capacitance: 0.01
+      breakdown_voltage: 300.0
+      arc_emission: 0.8
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+
+  # Biology materials (Phase 2 cross-system coupling)
+  12:
+    name: plant
+    display:
+      color: [34, 139, 34]
+      emissive: 0.0
+    physical:
+      category: solid
+      state_family: solid
+      density: 0.5
+      viscosity: 0.0
+      cohesion: 0.6
+      restitution: 0.05
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.05
+      heat_capacity: 0.8
+      cooling_rate: 0.01
+      melting_point: 0.0
+      boiling_point: 0.0
+      phase_high:
+        material: fire
+        temp: 180.0
+      default_flame_temp: 150.0
+      default_flame_life: 3
+    electrical:
+      conductivity: 0.1
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.3
+      burn_to: fire
+      oxygen_requirement: 0.2
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.8
+      growth_rate: 0.15
+      decay_rate: 0.05
+      nutrient_value: 0.3
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0

@@ -26,7 +26,8 @@ Optional chunks:
   PRES  float32[width*height]    pressure field
   MASS  float16[width*height]    wet mass
   CHRG  float32[width*height]    charge field
-  NUTR  float32[width*height*2]  nutrient + moisture
+  NUTR  float32[width*height]    nutrient field
+  MOIS  float32[width*height]    moisture field
   HUMD  float32[width*height]    humidity field
 """
 
@@ -53,6 +54,7 @@ TAG_PRES = b"PRES"
 TAG_MASS = b"MASS"
 TAG_CHRG = b"CHRG"
 TAG_NUTR = b"NUTR"
+TAG_MOIS = b"MOIS"
 TAG_HUMD = b"HUMD"
 
 # Header format: magic(4) + version(4) + width(4) + height(4) + flags(4) + chunk_count(4) + crc32(4) = 28 bytes
@@ -124,6 +126,9 @@ class V8Writer:
 
     def add_nutrient(self, data: bytes) -> None:
         self._chunks.append((TAG_NUTR, data))
+
+    def add_moisture(self, data: bytes) -> None:
+        self._chunks.append((TAG_MOIS, data))
 
     def add_humidity(self, data: bytes) -> None:
         self._chunks.append((TAG_HUMD, data))
@@ -239,6 +244,9 @@ class V8Reader:
 
     def get_nutrient(self) -> bytes | None:
         return self._chunks.get(TAG_NUTR)
+
+    def get_moisture(self) -> bytes | None:
+        return self._chunks.get(TAG_MOIS)
 
     def get_humidity(self) -> bytes | None:
         return self._chunks.get(TAG_HUMD)

@@ -17,6 +17,7 @@ layout(std430, binding = 0) readonly buffer CellBuffer { uint cells[]; };
 
 layout(r32f, binding = 9)  uniform readonly  image2D chargeIn;
 layout(r32f, binding = 10) uniform writeonly image2D chargeOut;
+layout(rg32f, binding = 3) uniform readonly  image2D velIn;  // Cross-system coupling
 
 uniform uvec2 gridSize;
 uniform uint  ruleStride;
@@ -44,6 +45,7 @@ void main(){
     Rule r = getRule(typ, ruleStride);
 
     float q = imageLoad(chargeIn, p).r;
+    vec2 v = imageLoad(velIn, p).xy;  // Cross-system coupling
 
     // Only propagate if this cell has any conductivity.
     // Insulators keep their charge frozen (useful for stored charge).
@@ -77,6 +79,16 @@ void main(){
         // Explicit update with dt scaling; clamp for stability.
         float rate = 4.0; // heuristic diffusion speed
         qNew = q + clamp(flux * rate * dt, -maxCharge, maxCharge);
+    }
+
+    // Cross-system coupling: Velocity-dependent charge advection
+    // Moving conductors carry charge downstream
+    if(length(v) > 1.0 && r.cond > 0.0){
+        ivec2 upwind = p - ivec2(int(sign(v.x)), int(sign(v.y)));
+        if(inBounds(upwind, gridSize)){
+            float upCharge = imageLoad(chargeIn, upwind).r;
+            qNew = mix(qNew, upCharge, 0.3 * length(v) * dt);
+        }
     }
 
     // Decay toward zero (leakage)

@@ -33,16 +33,27 @@ def _migrate_v6_cells(cell_bytes: bytes, count: int) -> bytes:
 class PersistenceManager:
     """Handles save/load and undo for the simulation grid state."""
 
-    def __init__(self, buffers: BufferManager, grid_size: tuple[int, int], atm_pressure: float):
-        self.buffers = buffers
-        self.width, self.height = grid_size
+    def __init__(self, width: int, height: int, atm_pressure: float = 0.0) -> None:
+        self.width = width
+        self.height = height
         self.atm_pressure = atm_pressure
-        self._undo_stack: deque[np.ndarray] = deque(maxlen=5)
+        self.buffers = None  # Set by engine
+        self._undo_stack: list[np.ndarray] = []
+        self._max_undo = 10
+        self._loaded_v8 = False  # Track if loaded save was v8 format
+        self._save_format = 7  # Default to v7, can be set to 8
+
+    def set_save_format(self, format_version: int) -> None:
+        """Set the save format version (7 or 8)."""
+        if format_version not in (7, 8):
+            raise ValueError("Save format must be 7 or 8")
+        self._save_format = format_version
 
     # ── Save / Load ─────────────────────────────────────────────────────────
 
     def save_state(self, filepath: Path, use_v8: bool = False) -> None:
-        if use_v8:
+        # Auto-migrate to v8 if loaded save was v8 or if explicitly requested
+        if use_v8 or self._save_format == 8 or self._loaded_v8:
             self._save_state_v8(filepath)
             return
         cell_bytes = self.buffers.save_state()
@@ -67,7 +78,11 @@ class PersistenceManager:
         except Exception:
             pass
         try:
-            w.add_nutrient(self.buffers.nutrient_a.read() + self.buffers.moisture_a.read())
+            w.add_nutrient(self.buffers.nutrient_a.read())
+        except Exception:
+            pass
+        try:
+            w.add_moisture(self.buffers.moisture_a.read())
         except Exception:
             pass
         try:
@@ -97,9 +112,11 @@ class PersistenceManager:
             version_check = int(np.frombuffer(raw[4:8], dtype=np.uint32)[0])
             if version_check == _SAVE_VERSION_V8:
                 self._load_state_v8(filepath)
+                self._loaded_v8 = True
                 return
 
         self._load_state_v7(raw)
+        self._loaded_v8 = False
 
     def _load_state_v7(self, raw: bytes) -> None:
         expected_cell_bytes = self.width * self.height * 4
@@ -174,9 +191,15 @@ class PersistenceManager:
         nutrient = r.get_nutrient()
         if nutrient is not None:
             try:
-                half = len(nutrient) // 2
-                self.buffers.nutrient_a.write(nutrient[:half])
-                self.buffers.moisture_a.write(nutrient[half:])
+                self.buffers.nutrient_a.write(nutrient)
+                self.buffers.nutrient_b.write(nutrient)
+            except Exception:
+                pass
+        moisture = r.get_moisture()
+        if moisture is not None:
+            try:
+                self.buffers.moisture_a.write(moisture)
+                self.buffers.moisture_b.write(moisture)
             except Exception:
                 pass
         humidity = r.get_humidity()

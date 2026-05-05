@@ -33,7 +33,27 @@ Falling Sand is organized around a Python runtime shell and a GPU-resident simul
 5. **Presentation**
    - `hud.py` renders material/brush HUD.
    - `ui/` renders pause menu, inspector (with ecology fields), overlays, theme helpers, and sound placeholders.
+   - `ui/performance_overlay.py` provides real-time FPS monitoring and per-pass timing visualization.
+   - `ui/system_controls.py` provides real-time parameter tuning for electricity, biology, weather, and bloom settings.
    - `levels/` provides built-in and persisted custom levels.
+
+## Performance Monitoring (v7 Foundation)
+
+### Performance Overlay
+
+The performance overlay (Ctrl+P) displays:
+- Real-time FPS with color coding (green ≥55, yellow 30-55, red <30)
+- FPS history graph (60-frame sliding window)
+- Per-pass timing bars with budget-exceeded highlighting
+- Memory usage estimate
+- Quality tier indicator when adaptive mode enabled
+
+### Adaptive Quality
+
+When `--adaptive-quality` is enabled, the pipeline automatically adjusts quality tiers based on sustained FPS:
+- Downgrade: FPS < min_fps_target * 0.9 for 30+ frames
+- Upgrade: FPS > min_fps_target * 1.2 for 30+ frames
+- Quality tiers affect pressure iterations, acoustic substeps, and bloom enabled state
 
 ## Key Data Flow
 
@@ -60,8 +80,20 @@ Falling Sand is organized around a Python runtime shell and a GPU-resident simul
 | Nutrient | r32f | 13/14 | nutrient_a / nutrient_b |
 | Moisture | r32f | 15/16 | moisture_a / moisture_b |
 | Humidity | r32f | 17/18 | humidity_a / humidity_b |
+| Bloom A | rgba8 | 19 | bloom_a (half-res) |
+| Bloom B | rgba8 | 20 | bloom_b (half-res) |
 | Mass | r16f | — | mass_a / mass_b |
 | Wind | rg16f | — | wind_tex |
+
+## Performance Monitoring
+
+- **PassProfiler**: Per-pass timing in `gpu/profiler.py`
+- **Adaptive substeps**: CFL-based in `gpu/pipeline.py`
+- **Quality tiers**: Dynamic adjustment based on fps (planned)
+- **Benchmark suite**: `tests/benchmark_performance.py` (planned)
+- **Performance overlay**: UI overlay for real-time metrics (planned)
+
+See `docs/PERFORMANCE.md` for complete performance guide.
 
 ## High-Risk Couplings
 
