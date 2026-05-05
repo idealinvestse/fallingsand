@@ -2,7 +2,7 @@
 
 GPU-accelerated falling-sand simulation built with Python, Pygame, ModernGL, and GLSL 4.30 compute shaders.
 
-The project currently uses a multi-pass GPU pipeline for materials, thermal state, liquid behavior, pressure/velocity fields, acoustic pressure waves, explosions, and final rendering.
+Multi-pass GPU pipeline: materials, thermal state, liquid behavior, pressure/velocity fields, acoustic pressure waves, electricity propagation, biology/ecology, weather, explosions, and final rendering with ambient occlusion and emissive glow.
 
 ## Current Version Model
 
@@ -58,8 +58,9 @@ python launcher.py
 | `X` | Explosion at cursor; Shift+`X` for larger explosion |
 | Arrow keys | Adjust wind vector |
 | `W` | Toggle wind |
+| `Tab` | Cycle debug overlay (off → pressure → charge → nutrient → moisture → humidity) |
 | `V` | Toggle pressure overlay |
-| `I` | Toggle inspector |
+| `I` | Toggle inspector (cell, thermal, motion, fluids, material, ecology) |
 | `ESC` / `P` | Pause menu |
 | `Ctrl+Z` | Undo |
 | `F12` | Screenshot |
@@ -82,6 +83,29 @@ python launcher.py
 --perf                           Print periodic timing data
 ```
 
+## Features
+
+### Core Physics
+- **State machine**: material phase transitions, burning, melting, freezing
+- **Liquid dynamics**: gravity-driven flow with viscosity, surface tension, cohesion
+- **Thermal simulation**: heat diffusion, cooling, blackbody radiation glow
+- **Fluid dynamics**: velocity advection, pressure projection (Jacobi), vorticity confinement
+- **Acoustics**: weakly-compressible gas pressure waves, explosion shockwaves
+
+### Phase 1 — Extended Physics
+- **Electricity**: charge propagation through conductors, arc breakdown with heat/pressure pulses, brush charge injection (mode 4)
+- **Biology/Ecology**: nutrient cycling, moisture dynamics, plant/slime growth and decay
+- **Weather**: atmospheric humidity, evaporation, condensation, rain, wind advection
+
+### Phase 2 — Debug & UI
+- **Debug overlay**: heatmap visualization for pressure, charge, nutrient, moisture, humidity (Tab)
+- **Inspector panel**: real-time cell properties including all ecology fields (I)
+
+### Phase 3 — Rendering
+- **Ambient occlusion**: depth shading below solid surfaces
+- **Emissive glow**: hot materials illuminate neighboring cells
+- **Water depth**: deeper water renders darker blue
+
 ## Materials
 
 Material definitions are loaded from `simulation/materials.yaml` through `simulation/materials.py`.
@@ -96,9 +120,12 @@ Important files:
 - `launcher.py`: tabbed launcher UI.
 - `simulation/engine.py`: public simulation API and high-level orchestration.
 - `gpu/pipeline.py`: GPU compute pass order and resource binding.
+- `gpu/pass_graph.py`: declarative compute pass definitions and ordering.
 - `gpu/buffers.py`: GPU buffer/texture allocation and swap management.
+- `gpu/resources.py`: centralized resource binding registry.
 - `gpu/uniforms.py`: UBO packing for simulation, explosion, VFX, and wind data.
-- `shaders/*.glsl`: compute shaders.
+- `gpu/shader_registry.py`: shader manifest and loading with common.glsl prepended.
+- `gpu/profiler.py`: per-pass GPU timing instrumentation.
 - `levels/`: built-in and custom level support.
 - `ui/` and `hud.py`: overlays, pause menu, inspector, HUD, sound placeholder.
 

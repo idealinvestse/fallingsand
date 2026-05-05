@@ -23,8 +23,16 @@ This document describes the GPU resource binding layout used across all shaders.
 | 6 | R32F | pressureOut / pres_b | Pressure output | Write |
 | 7 | RGBA8 | displayTexture | Final render output | Write |
 | 8 | R32F | vorticityTex | Vorticity for confinement | Read/Write |
+| 9 | R32F | chargeTex / chargeIn | Electric charge/potential | Read |
+| 10 | R32F | chargeOut | Charge output | Write |
 | 11 | R32F | tempTex / tempIn / temp_a | Temperature field | Read |
 | 12 | R32F | tempOut / temp_b | Temperature output | Write |
+| 13 | R32F | nutrientTex / nutrientIn | Nutrient field | Read |
+| 14 | R32F | nutrientOut | Nutrient output | Write |
+| 15 | R32F | moistureTex / moistureIn | Moisture field | Read |
+| 16 | R32F | moistureOut | Moisture output | Write |
+| 17 | R32F | humidityTex / humidityIn | Atmospheric humidity | Read |
+| 18 | R32F | humidityOut | Humidity output | Write |
 
 ## UBO Bindings (Uniform Buffer Objects)
 

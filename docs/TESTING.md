@@ -26,16 +26,19 @@ Useful targeted commands:
 python -m pytest tests/test_cli.py tests/test_shader_logic.py tests/test_materials.py
 python -m pytest tests/test_physics_invariants.py tests/test_physics_gravity.py
 python -m pytest tests/test_ubo_layouts.py
+python -m pytest tests/test_pass_graph_contracts.py tests/test_shader_registry_contracts.py
+python -m pytest tests/test_profiler.py
 ```
 
 ## Contracts to Protect
 
 - CLI defaults and `SimulationConfig.from_args`.
 - Material registry size and `RULE_STRIDE`.
-- Shader bindings and image formats.
+- Shader bindings and image formats (via `gpu/resources.py`).
+- Pass graph order and resource declarations (via `gpu/pass_graph.py`).
 - Cell packing and save migrations.
 - Gravity/buoyancy direction.
-- Undo/load/clear resets of stale physics buffers.
+- Undo/load/clear resets of stale physics buffers (including charge, nutrient, moisture, humidity).
 
 ## Performance Checks
 

@@ -1,31 +1,55 @@
 # Changelog
 
-This changelog consolidates the root implementation summaries into a single maintenance history.
+Consolidated implementation history for the Falling Sand simulation.
 
-## Current Development State
+## Phase 3 — Rendering (2026-05)
 
-- Multi-pass GPU pipeline is the active architecture.
-- Save format is `FSND` v7.
-- Temperature is stored in `r32f` textures, not in packed cells.
-- Materials are YAML-driven and packed into a `RULE_STRIDE = 49` GPU rule buffer.
-- Levels, pause menu, inspector, pressure overlay, undo, screenshots, and launcher support are present.
+- **Ambient occlusion**: cells below solid surfaces are darkened 25%; stacked solids darken 8% per layer.
+- **Emissive light propagation**: hot/emissive neighbors (8-direction stencil) cast blackbody-colored light onto surroundings with inverse-square falloff.
+- **Water depth**: water cells probe downward (up to 8 cells) and render darker/more saturated blue with depth.
+- All effects are computed in `render_shader.glsl` and are inactive when debug overlay is active.
 
-## Physics and Stability Work
+## Phase 2 — Debug & UI (2026-05)
 
-- Added dedicated heat diffusion and removed legacy packed-cell temperature storage.
-- Added liquid step, velocity advection, pressure projection, vorticity, acoustic pressure/velocity passes.
-- Added explosion variants, fragmentation/shrapnel behavior, crater/scatter concepts, and VFX state.
-- Corrected gravity direction and improved substep behavior for frame-time stability.
-- Added runtime material validation and material registry tests.
+- **Debug overlay**: `render_shader.glsl` supports `debugView` uniform (0=off, 1=pressure, 2=charge, 3=nutrient, 4=moisture, 5=humidity) with per-field heatmap color scales.
+- **Tab keybinding**: cycles through debug views when unpaused (paused Tab still cycles levels).
+- **Inspector ecology section**: panel shows charge, nutrient, moisture, humidity values; panel height increased to 480px.
+- **probe_cell**: reads charge, nutrient, moisture, humidity textures alongside existing fields.
 
-## Documentation Consolidation
+## Phase 1 — Extended Physics (2026-05)
 
-- README now focuses on user setup, controls, CLI, and documentation index.
-- Architecture, GPU pipeline, materials, save format, and testing docs are split into dedicated files.
-- Shader binding documentation is expected to match current host/shader resource contracts.
+### Electricity
+- **Charge propagation**: `electricity_step.glsl` with 4-neighbor conductivity-weighted diffusion, harmonic mean weighting across material boundaries, exponential decay, and hard cap.
+- **Arc breakdown**: `electricity_arc.glsl` triggers when charge exceeds `breakdownThreshold` on conductive materials (cond > 0.3), discharging to zero with temperature spike and pressure pulse.
+- **Brush charge injection**: mode 4 in `brush_shader.glsl` adds `chargeDelta` to the charge field.
+- **GPU resources**: `charge_a/b` textures (r32f, binding 9/10), swap/clear/resize support.
 
-## Known Maintenance Items
+### Biology/Ecology
+- **Nutrient cycling**: `biology_step.glsl` diffuses nutrients through soil and water, consumed by bio materials for growth, replenished by decay.
+- **Moisture dynamics**: diffuses through all materials, evaporates with heat, replenished by water cells.
+- **Growth/decay**: bio cells (plant, slime, blood, virus) consume nutrients + moisture + warmth to grow; decay without resources returns nutrients.
+- **GPU resources**: `nutrient_a/b` (binding 13/14), `moisture_a/b` (binding 15/16).
 
-- Establish a clean Git baseline; the current working tree may not have historical commits.
-- Keep app version labels, save format version, and shader comments distinct.
-- Add more scenario-based tests before large solver or architecture refactors.
+### Weather
+- **Atmospheric humidity**: `weather_step.glsl` diffuses through air/gas, advected by wind, evaporates from water, condenses when saturated.
+- **Rain**: humidity above saturation falls downward.
+- **GPU resources**: `humidity_a/b` (binding 17/18).
+
+## Core Physics (pre-Phase 1)
+
+- Multi-pass GPU pipeline: state → liquid_step → heat → vorticity → velocity_advect → force → divergence → pressure → project → advect.
+- Acoustic solver: weakly-compressible gas pressure waves with iterative substeps.
+- Explosion system: multiple types (high explosive, deflagration, thermobaric, napalm, fragmentation), crater formation, shrapnel, shockwave rings, screen flash.
+- Thermal simulation: heat diffusion, Newton cooling, blackbody radiation glow, pre-ignition charring.
+- Liquid dynamics: gravity-driven flow with viscosity, surface tension, cohesion, capillary action.
+- Wind system: UBO-driven wind vector with toggle and arrow-key adjustment.
+
+## Infrastructure
+
+- **Save format**: `FSND` v7 with separate cell (uint32) and temperature (float32) storage.
+- **Material system**: YAML-driven definitions, `RULE_STRIDE = 49`, validated at import time.
+- **Shader registry**: manifest-based loading with `common.glsl` prepended.
+- **Pass graph**: declarative `ComputePass` definitions with reads/writes/swaps/optional/iterative metadata.
+- **Resource registry**: centralized `ResourceBinding` definitions for SSBOs, images, and UBOs.
+- **Profiler**: per-pass GPU timing via `_timed_run` with `PassProfiler`.
+- **Testing**: 441 tests covering contracts, physics invariants, GPU integration, materials, shaders, and UI.
