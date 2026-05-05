@@ -48,6 +48,8 @@ IMAGE_BINDINGS: tuple[ResourceBinding, ...] = (
     ResourceBinding("moisture_out", ResourceKind.IMAGE, 16, "r32f", "write", "Moisture field output"),
     ResourceBinding("humidity_in", ResourceKind.IMAGE, 17, "r32f", "read", "Atmospheric humidity input"),
     ResourceBinding("humidity_out", ResourceKind.IMAGE, 18, "r32f", "write", "Atmospheric humidity output"),
+    ResourceBinding("bloom_a", ResourceKind.IMAGE, 19, "rgba8", "readwrite", "Bloom buffer A (half-res)"),
+    ResourceBinding("bloom_b", ResourceKind.IMAGE, 20, "rgba8", "readwrite", "Bloom buffer B (half-res)"),
 )
 
 UBO_BINDINGS: tuple[ResourceBinding, ...] = (
@@ -83,6 +85,8 @@ IMAGE_MOISTURE_IN = 15
 IMAGE_MOISTURE_OUT = 16
 IMAGE_HUMIDITY_IN = 17
 IMAGE_HUMIDITY_OUT = 18
+IMAGE_BLOOM_A = 19
+IMAGE_BLOOM_B = 20
 
 UBO_SIM_CONFIG = 3
 UBO_EXPLOSION = 4

@@ -39,6 +39,10 @@ class SimulationConfig:
     acoustic_substeps: int = 6       # Substeps per frame for CFL stability
     atm_pressure: float = 1.0        # Normalised ambient atmospheric pressure
 
+    # Post-FX settings
+    bloom_enabled: bool = True
+    bloom_threshold: float = 0.6
+
     # UI settings
     no_hud: bool = False
     no_stats: bool = False
@@ -69,6 +73,8 @@ class SimulationConfig:
             acoustic_substeps=getattr(args, 'acoustic_substeps', 6),
             atm_pressure=getattr(args, 'atm_pressure', 1.0),
             perf_overlay=getattr(args, 'perf', False),
+            bloom_enabled=not getattr(args, 'no_bloom', False),
+            bloom_threshold=getattr(args, 'bloom_threshold', 0.6),
         )
 
     def validate(self) -> list[str]:

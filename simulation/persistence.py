@@ -13,6 +13,7 @@ from gpu.buffers import BufferManager
 
 _SAVE_MAGIC = b"FSND"
 _SAVE_VERSION = 7
+_SAVE_VERSION_V8 = 8
 
 # Cell packing layout history:
 #   v6 and earlier: type[0..7] | temp[8..15] | life[16..23] | flags[24..31]
@@ -40,7 +41,10 @@ class PersistenceManager:
 
     # ── Save / Load ─────────────────────────────────────────────────────────
 
-    def save_state(self, filepath: Path) -> None:
+    def save_state(self, filepath: Path, use_v8: bool = False) -> None:
+        if use_v8:
+            self._save_state_v8(filepath)
+            return
         cell_bytes = self.buffers.save_state()
         temp_bytes = self.buffers.temp_a.read()
         header = bytearray()
@@ -50,6 +54,27 @@ class PersistenceManager:
             dtype=np.uint32,
         ).tobytes()
         filepath.write_bytes(bytes(header) + cell_bytes + temp_bytes)
+
+    def _save_state_v8(self, filepath: Path) -> None:
+        from simulation.persistence_v8 import V8Writer
+        w = V8Writer(self.width, self.height)
+        w.add_cells(self.buffers.save_state())
+        w.add_temperature(self.buffers.temp_a.read())
+        w.add_meta()
+        # Optional: save physics fields if available
+        try:
+            w.add_charge(self.buffers.charge_a.read())
+        except Exception:
+            pass
+        try:
+            w.add_nutrient(self.buffers.nutrient_a.read() + self.buffers.moisture_a.read())
+        except Exception:
+            pass
+        try:
+            w.add_humidity(self.buffers.humidity_a.read())
+        except Exception:
+            pass
+        w.write(filepath)
 
     def get_state(self) -> np.ndarray:
         return np.frombuffer(self.buffers.get_read_buf().read(), dtype=np.uint32).copy()
@@ -66,6 +91,17 @@ class PersistenceManager:
         if not filepath.exists():
             raise FileNotFoundError(f"Save file not found: {filepath}")
         raw = filepath.read_bytes()
+
+        # Detect v8 format
+        if raw[:4] == _SAVE_MAGIC and len(raw) >= 8:
+            version_check = int(np.frombuffer(raw[4:8], dtype=np.uint32)[0])
+            if version_check == _SAVE_VERSION_V8:
+                self._load_state_v8(filepath)
+                return
+
+        self._load_state_v7(raw)
+
+    def _load_state_v7(self, raw: bytes) -> None:
         expected_cell_bytes = self.width * self.height * 4
 
         if raw[:4] == _SAVE_MAGIC:
@@ -106,18 +142,51 @@ class PersistenceManager:
             self.buffers.temp_b.write(temp_bytes)
         else:
             # Legacy save format (v4/v5): only cell data, no float temperature.
-            # Migrate cell layout and initialize temps to ambient.
             if raw[:4] == _SAVE_MAGIC and _version < 6:
                 payload = _migrate_v6_cells(payload, self.width * self.height)
             self.buffers.load_state(payload)
-            # Legacy saves have no float temp data — initialize to ambient.
             from core.constants import TEMP_AMBIENT
             self.buffers.clear_temp_buffers(float(TEMP_AMBIENT))
 
-        # Reset fluid dynamics to avoid stale pressure/velocity affecting loaded state.
         self.buffers.clear_physics_buffers(ambient_pressure=self.atm_pressure)
 
-    # ── Undo ────────────────────────────────────────────────────────────────
+    def _load_state_v8(self, filepath: Path) -> None:
+        from simulation.persistence_v8 import V8Reader
+        r = V8Reader(filepath)
+        if (r.width, r.height) != (self.width, self.height):
+            raise ValueError(
+                f"Save grid size {(r.width, r.height)} does not match current {(self.width, self.height)}"
+            )
+        cell_bytes = r.get_cells()
+        temp_bytes = r.get_temperature()
+        self.buffers.read_buf.write(cell_bytes)
+        self.buffers.write_buf.write(cell_bytes)
+        self.buffers.temp_a.write(temp_bytes)
+        self.buffers.temp_b.write(temp_bytes)
+        # Restore optional fields
+        charge = r.get_charge()
+        if charge is not None:
+            try:
+                self.buffers.charge_a.write(charge)
+                self.buffers.charge_b.write(charge)
+            except Exception:
+                pass
+        nutrient = r.get_nutrient()
+        if nutrient is not None:
+            try:
+                half = len(nutrient) // 2
+                self.buffers.nutrient_a.write(nutrient[:half])
+                self.buffers.moisture_a.write(nutrient[half:])
+            except Exception:
+                pass
+        humidity = r.get_humidity()
+        if humidity is not None:
+            try:
+                self.buffers.humidity_a.write(humidity)
+                self.buffers.humidity_b.write(humidity)
+            except Exception:
+                pass
+        self.buffers.clear_physics_buffers(ambient_pressure=self.atm_pressure)
 
     def push_undo_snapshot(self) -> None:
         self._undo_stack.append(self.get_state())

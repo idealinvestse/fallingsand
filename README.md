@@ -8,8 +8,8 @@ Multi-pass GPU pipeline: materials, thermal state, liquid behavior, pressure/vel
 
 The project separates user-facing version labels from internal compatibility versions:
 
-- **Application line**: v5.x multi-pass GPU simulation.
-- **Save format**: `FSND` v7.
+- **Application line**: v6.0 Genesis — multi-pass GPU simulation.
+- **Save format**: `FSND` v7 (legacy) and `FSND` v8 (chunked binary with CRC32).
 - **Cell layout**: `type[0..7] | life[8..15] | flags[16..23] | unused[24..31]`.
 - **Temperature storage**: `r32f` float textures are the authoritative temperature store.
 - **Material rule stride**: `RULE_STRIDE = 49`.
@@ -58,7 +58,7 @@ python launcher.py
 | `X` | Explosion at cursor; Shift+`X` for larger explosion |
 | Arrow keys | Adjust wind vector |
 | `W` | Toggle wind |
-| `Tab` | Cycle debug overlay (off → pressure → charge → nutrient → moisture → humidity) |
+| `Tab` | Cycle debug overlay: pressure → charge → nutrient → moisture → humidity → off |
 | `V` | Toggle pressure overlay |
 | `I` | Toggle inspector (cell, thermal, motion, fluids, material, ecology) |
 | `ESC` / `P` | Pause menu |
@@ -77,6 +77,8 @@ python launcher.py
 --no-wet-dry                     Disable wet/dry behavior
 --no-thermal                     Disable thermal diffusion/effects
 --no-acoustics                   Disable acoustic pressure solver
+--no-bloom                       Disable bloom post-processing
+--bloom-threshold N              Bloom luminance threshold (default 0.6)
 --level ID                       Start with a built-in or custom level
 --preset {low,med,high}          Apply a quick performance/quality preset
 --paused                         Start paused
@@ -105,10 +107,23 @@ python launcher.py
 - **Ambient occlusion**: depth shading below solid surfaces
 - **Emissive glow**: hot materials illuminate neighboring cells
 - **Water depth**: deeper water renders darker blue
+- **Bloom post-FX**: extract/bright pass + separable gaussian blur + composite, disabled in debug view
 
 ## Materials
 
 Material definitions are loaded from `simulation/materials.yaml` through `simulation/materials.py`.
+
+### v6 Material Schema
+
+The new v6 schema (`simulation/material_schema.py`) supports structured property groups:
+- `physical` — density, viscosity, restitution, friction
+- `thermal` — melting_point, boiling_point, thermal_conductivity
+- `electrical` — conductivity, capacitance, breakdown_threshold
+- `chemical` — reactivity, corrosion_resistance, ph_sensitivity
+- `biological` — organic, nutrient_value, decomposition_rate, toxicity
+- `explosive` — explosive, detonation_temp, blast_radius_multiplier
+
+Load v6 YAML via `MaterialRegistry.from_v6_yaml()`; the loader validates and converts to the internal flat format for backward compatibility. See `simulation/materials_v6.yaml` for examples.
 
 The active material IDs are `0..48`; the authoritative registry and GPU rule buffer are validated at import/test time. See `docs/MATERIALS.md` for schema and packing details.
 

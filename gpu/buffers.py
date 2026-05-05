@@ -99,6 +99,13 @@ class BufferManager:
         self.display_texture = ctx.texture((self.width, self.height), 4, dtype='f1')
         self.display_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
 
+        # Bloom post-FX textures (half resolution)
+        bloom_w, bloom_h = max(1, self.width // 2), max(1, self.height // 2)
+        self.bloom_a = ctx.texture((bloom_w, bloom_h), 4, dtype='f1')
+        self.bloom_a.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        self.bloom_b = ctx.texture((bloom_w, bloom_h), 4, dtype='f1')
+        self.bloom_b.filter = (moderngl.LINEAR, moderngl.LINEAR)
+
         # Rule buffer (material properties)
         self.rule_ssbo = self._create_rule_buffer()
 
@@ -310,6 +317,13 @@ class BufferManager:
         # Recreate display texture
         self.display_texture = self.ctx.texture((new_width, new_height), 4, dtype='f1')
         self.display_texture.filter = (moderngl.NEAREST, moderngl.NEAREST)
+
+        # Recreate bloom textures (half resolution)
+        bloom_w, bloom_h = max(1, new_width // 2), max(1, new_height // 2)
+        self.bloom_a = self.ctx.texture((bloom_w, bloom_h), 4, dtype='f1')
+        self.bloom_a.filter = (moderngl.LINEAR, moderngl.LINEAR)
+        self.bloom_b = self.ctx.texture((bloom_w, bloom_h), 4, dtype='f1')
+        self.bloom_b.filter = (moderngl.LINEAR, moderngl.LINEAR)
 
         # Recreate reservation buffer
         self.reservations_buf = self.ctx.buffer(reserve=self.cell_count * 4)

@@ -1,4 +1,12 @@
-"""Falling Sand v5.0 — Entry Point."""
+"""Falling Sand v6.0 — Entry Point.
+
+v6 Genesis features:
+- v6 material schema support (simulation/material_schema.py)
+- FSND v8 chunked save format with CRC32 (simulation/persistence_v8.py)
+- Electricity, biology, weather systems
+- Bloom post-FX, AO, emissive glow, water depth rendering
+- Debug overlays (Tab), inspector ecology (I)
+"""
 
 import argparse
 import os
@@ -80,6 +88,9 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--acoustic-substeps", type=int, default=6, help="Acoustic substeps per frame")
     parser.add_argument("--atm-pressure", type=float, default=1.0, help="Normalised ambient pressure")
     parser.add_argument("--perf", action="store_true", help="Print periodic performance timings")
+    # Bloom post-FX flags
+    parser.add_argument("--no-bloom", action="store_true", help="Disable bloom post-processing")
+    parser.add_argument("--bloom-threshold", type=float, default=0.6, help="Bloom luminance threshold (0.0-1.0)")
     return parser.parse_args()
 
 

@@ -35,6 +35,8 @@ SHADER_MANIFEST: tuple[ShaderManifestEntry, ...] = (
     ShaderManifestEntry("electricity_arc", "electricity_arc.glsl"),
     ShaderManifestEntry("biology", "biology_step.glsl"),
     ShaderManifestEntry("weather", "weather_step.glsl"),
+    ShaderManifestEntry("bloom_extract", "bloom_extract.glsl", include_common=False),
+    ShaderManifestEntry("bloom_blur", "bloom_blur.glsl", include_common=False),
 )
 
 

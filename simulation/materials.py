@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 
 from core.constants import NUM_TYPES, RULE_STRIDE
@@ -20,6 +22,33 @@ class MaterialRegistry:
         self._materials: dict[int, Material] = {}
         self._initialize_materials()
         self._validate_materials()
+
+    @classmethod
+    def from_v6_yaml(cls, path: str | Path) -> "MaterialRegistry":
+        """Create a MaterialRegistry from a v6-format YAML file.
+
+        Loads the structured v6 schema, converts to legacy flat dicts,
+        and initializes the registry. This provides a migration path
+        from the current flat YAML to the new structured format.
+        """
+        from simulation.material_schema import load_materials_v6, to_legacy_defs
+
+        v6_materials = load_materials_v6(path)
+        legacy_defs = to_legacy_defs(v6_materials)
+
+        # Temporarily replace the module-level definitions
+        global _MATERIAL_DEFINITIONS
+        _original = _MATERIAL_DEFINITIONS
+        _MATERIAL_DEFINITIONS = legacy_defs
+
+        try:
+            registry = cls.__new__(cls)
+            registry._materials = {}
+            registry._initialize_materials()
+            registry._validate_materials()
+            return registry
+        finally:
+            _MATERIAL_DEFINITIONS = _original
 
     def _initialize_materials(self) -> None:
         """Initialize materials from definitions."""

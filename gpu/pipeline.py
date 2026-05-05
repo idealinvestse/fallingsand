@@ -19,6 +19,8 @@ from gpu.uniforms import (
 from gpu.pass_graph import ComputePass, default_render_passes, default_step_passes
 from gpu.profiler import PassProfiler
 from gpu.resources import (
+    IMAGE_BLOOM_A,
+    IMAGE_BLOOM_B,
     IMAGE_CHARGE_IN,
     IMAGE_CHARGE_OUT,
     IMAGE_DISPLAY,
@@ -107,6 +109,8 @@ class Pipeline:
         self.electricity_arc_shader = shaders["electricity_arc"]
         self.biology_shader = shaders["biology"]
         self.weather_shader = shaders["weather"]
+        self.bloom_extract_shader = shaders["bloom_extract"]
+        self.bloom_blur_shader = shaders["bloom_blur"]
 
     # ── Display blit setup ──────────────────────────────────────────────────
 
@@ -483,6 +487,39 @@ class Pipeline:
         debug_view: int = 0,
     ) -> None:
         """Render cells into display_texture and blit to the default framebuffer."""
+        # ── Bloom post-FX (if enabled) ────────────────────────────────────────
+        bloom_enabled = getattr(self.config, "bloom_enabled", True) and debug_view == 0
+        if bloom_enabled:
+            # 1. Extract bright pixels + downsample to half-res
+            self.buffers.display_texture.bind_to_image(IMAGE_DISPLAY, read=True, write=False, level=0, format=_FMT_RGBA8)
+            self.buffers.bloom_a.bind_to_image(IMAGE_BLOOM_A, read=False, write=True, level=0, format=_FMT_RGBA8)
+            self._set_common_uniforms(self.bloom_extract_shader)
+            self._set_if(self.bloom_extract_shader, "bloomThreshold", getattr(self.config, "bloom_threshold", 0.6))
+            self._timed_run("bloom_extract", self.bloom_extract_shader,
+                            group_x=max(1, (self.width + 31) // 32),
+                            group_y=max(1, (self.height + 31) // 32), group_z=1)
+            self.ctx.memory_barrier()
+
+            # 2. Horizontal blur: bloom_a → bloom_b
+            self.buffers.bloom_a.bind_to_image(IMAGE_BLOOM_A, read=True, write=False, level=0, format=_FMT_RGBA8)
+            self.buffers.bloom_b.bind_to_image(IMAGE_BLOOM_B, read=False, write=True, level=0, format=_FMT_RGBA8)
+            self._set_common_uniforms(self.bloom_blur_shader)
+            self._set_if(self.bloom_blur_shader, "blurDirection", 0)
+            self._timed_run("bloom_blur_h", self.bloom_blur_shader,
+                            group_x=max(1, (self.width + 31) // 32),
+                            group_y=max(1, (self.height + 31) // 32), group_z=1)
+            self.ctx.memory_barrier()
+
+            # 3. Vertical blur: bloom_b → bloom_a
+            self.buffers.bloom_b.bind_to_image(IMAGE_BLOOM_A, read=True, write=False, level=0, format=_FMT_RGBA8)
+            self.buffers.bloom_a.bind_to_image(IMAGE_BLOOM_B, read=False, write=True, level=0, format=_FMT_RGBA8)
+            self._set_if(self.bloom_blur_shader, "blurDirection", 1)
+            self._timed_run("bloom_blur_v", self.bloom_blur_shader,
+                            group_x=max(1, (self.width + 31) // 32),
+                            group_y=max(1, (self.height + 31) // 32), group_z=1)
+            self.ctx.memory_barrier()
+
+        # ── Main render pass ──────────────────────────────────────────────────
         self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
         self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
         self.buffers.pres_a.bind_to_image(IMAGE_PRESSURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
@@ -492,6 +529,7 @@ class Pipeline:
         self.buffers.moisture_a.bind_to_image(IMAGE_MOISTURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
         self.buffers.humidity_a.bind_to_image(IMAGE_HUMIDITY_IN, read=True, write=False, level=0, format=_FMT_R32F)
         self.buffers.display_texture.bind_to_image(IMAGE_DISPLAY, read=False, write=True, level=0, format=_FMT_RGBA8)
+        self.buffers.bloom_a.bind_to_image(IMAGE_BLOOM_A, read=True, write=False, level=0, format=_FMT_RGBA8)
         self._set_common_uniforms(self.render_shader)
         self._set_if(self.render_shader, "showPressure", int(show_pressure))
         self._set_if(self.render_shader, "debugView", debug_view)

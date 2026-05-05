@@ -1,0 +1,250 @@
+# Falling Sand v6 Material Definitions
+# Structured schema with grouped properties.
+schema_version: 6
+
+materials:
+  0:
+    name: air
+    display:
+      color: [0, 0, 0]
+      emissive: 0.0
+    physical:
+      category: gas
+      state_family: gas
+      density: 0.12
+      viscosity: 0.0
+      cohesion: 0.0
+      restitution: 0.0
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.0
+      heat_capacity: 1.0
+      cooling_rate: 0.0
+      melting_point: 0.0
+      boiling_point: 0.0
+    electrical:
+      conductivity: 0.0
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+
+  2:
+    name: water
+    display:
+      color: [80, 140, 255]
+      emissive: 0.02
+    physical:
+      category: liquid
+      state_family: liquid
+      density: 2.0
+      viscosity: 0.05
+      cohesion: 0.0
+      restitution: 0.2
+      surface_tension: 0.3
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.12
+      heat_capacity: 1.0
+      cooling_rate: 0.02
+      melting_point: 0.0
+      boiling_point: 100.0
+      phase_high:
+        material: steam
+        temp: 140.0
+      phase_low:
+        material: ice
+        temp: 48.0
+      default_flame_temp: 0.0
+      default_flame_life: 0
+    electrical:
+      conductivity: 0.05
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      burn_to: water
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+      reactions:
+        - partner: lava
+          product_self: steam
+          product_neighbor: stone
+          probability: 1.0
+          temp_threshold: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+
+  4:
+    name: oil
+    display:
+      color: [100, 80, 40]
+      emissive: 0.05
+    physical:
+      category: liquid
+      state_family: liquid
+      density: 1.5
+      viscosity: 0.15
+      cohesion: 0.1
+      restitution: 0.1
+      surface_tension: 0.15
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.08
+      heat_capacity: 0.8
+      cooling_rate: 0.01
+      melting_point: 0.0
+      boiling_point: 180.0
+      phase_high:
+        material: fire
+        temp: 120.0
+      default_flame_temp: 200.0
+      default_flame_life: 4
+    electrical:
+      conductivity: 0.0
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.90
+      burn_to: fire
+      oxygen_requirement: 0.3
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+
+  6:
+    name: lava
+    display:
+      color: [255, 50, 0]
+      emissive: 0.8
+    physical:
+      category: liquid
+      state_family: liquid
+      density: 3.5
+      viscosity: 0.7
+      cohesion: 0.3
+      restitution: 0.05
+      surface_tension: 0.4
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.50
+      heat_capacity: 2.0
+      cooling_rate: 0.005
+      melting_point: 700.0
+      boiling_point: 1200.0
+      phase_low:
+        material: stone
+        temp: 200.0
+      default_flame_temp: 0.0
+      default_flame_life: 0
+    electrical:
+      conductivity: 0.0
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+
+  8:
+    name: steam
+    display:
+      color: [200, 200, 220]
+      emissive: 0.1
+    physical:
+      category: gas
+      state_family: gas
+      density: -0.5
+      viscosity: 0.0
+      cohesion: 0.0
+      restitution: 0.0
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.1
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.04
+      heat_capacity: 0.5
+      cooling_rate: 0.05
+      melting_point: 0.0
+      boiling_point: 0.0
+      phase_low:
+        material: water
+        temp: 80.0
+      default_flame_temp: 0.0
+      default_flame_life: 0
+    electrical:
+      conductivity: 0.0
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0

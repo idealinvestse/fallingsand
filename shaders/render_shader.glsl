@@ -10,6 +10,7 @@ layout(r32f, binding = 9)  uniform readonly image2D chargeTex;
 layout(r32f, binding = 13) uniform readonly image2D nutrientTex;
 layout(r32f, binding = 15) uniform readonly image2D moistureTex;
 layout(r32f, binding = 17) uniform readonly image2D humidityTex;
+layout(rgba8, binding = 19) uniform readonly image2D bloomTex;
 
 uniform uvec2 gridSize;
 uniform uint frame;
@@ -248,5 +249,28 @@ void main(){
     }
 
     col = clamp(col, 0.0, 1.0);
+
+    // ── Bloom composite: sample half-res bloom texture with bilinear ────────
+    if (debugView == 0) {
+        vec2 bloomUV = (vec2(p) + 0.5) / vec2(gridSize);
+        ivec2 bloomSize = ivec2(gridSize.x / 2u, gridSize.y / 2u);
+        vec2 bloomCoord = bloomUV * vec2(bloomSize) - 0.5;
+        ivec2 bloomBase = ivec2(floor(bloomCoord));
+        vec2 bloomT = bloomCoord - vec2(bloomBase);
+        bloomBase = clamp(bloomBase, ivec2(0), bloomSize - ivec2(1));
+        ivec2 bloomBase1 = clamp(bloomBase + ivec2(1, 0), ivec2(0), bloomSize - ivec2(1));
+        ivec2 bloomBase2 = clamp(bloomBase + ivec2(0, 1), ivec2(0), bloomSize - ivec2(1));
+        ivec2 bloomBase3 = clamp(bloomBase + ivec2(1, 1), ivec2(0), bloomSize - ivec2(1));
+        vec3 b00 = imageLoad(bloomTex, bloomBase).rgb;
+        vec3 b10 = imageLoad(bloomTex, bloomBase1).rgb;
+        vec3 b01 = imageLoad(bloomTex, bloomBase2).rgb;
+        vec3 b11 = imageLoad(bloomTex, bloomBase3).rgb;
+        vec3 b0 = mix(b00, b10, bloomT.x);
+        vec3 b1 = mix(b01, b11, bloomT.x);
+        vec3 bloomSample = mix(b0, b1, bloomT.y);
+        col += bloomSample * 0.6;
+        col = clamp(col, 0.0, 1.0);
+    }
+
     imageStore(displayTexture, p, vec4(col, 1.0));
 }
