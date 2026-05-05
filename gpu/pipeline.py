@@ -16,6 +16,28 @@ from gpu.uniforms import (
     ExplosionVfxConfigData,
     WindConfigData,
 )
+from gpu.pass_graph import ComputePass, default_render_passes, default_step_passes
+from gpu.profiler import PassProfiler
+from gpu.resources import (
+    IMAGE_CHARGE_IN,
+    IMAGE_CHARGE_OUT,
+    IMAGE_DISPLAY,
+    IMAGE_DIVERGENCE,
+    IMAGE_HUMIDITY_IN,
+    IMAGE_HUMIDITY_OUT,
+    IMAGE_MOISTURE_IN,
+    IMAGE_MOISTURE_OUT,
+    IMAGE_NUTRIENT_IN,
+    IMAGE_NUTRIENT_OUT,
+    IMAGE_PRESSURE_IN,
+    IMAGE_PRESSURE_OUT,
+    IMAGE_TEMPERATURE_IN,
+    IMAGE_TEMPERATURE_OUT,
+    IMAGE_VELOCITY_IN,
+    IMAGE_VELOCITY_OUT,
+    IMAGE_VORTICITY,
+    SSBO_CELLS_READ,
+)
 from simulation.state import ExplosionState, ExplosionVfxState, WindState
 
 # OpenGL image format constants (avoid importing GL headers)
@@ -42,7 +64,32 @@ class Pipeline:
         self.config = config
         self.width, self.height = grid_size
 
-        # Shader programs
+        self.set_shaders(shaders)
+
+        # Ceil-dispatch so edges are always covered
+        self.gx = (self.width + 15) // 16
+        self.gy = (self.height + 15) // 16
+
+        # Display blit program
+        self._build_display_program()
+        self.last_step_ms = 0.0
+        self.last_render_ms = 0.0
+        self._frame = 0
+        self.step_passes: tuple[ComputePass, ...] = default_step_passes()
+        self.render_passes: tuple[ComputePass, ...] = default_render_passes()
+        self.profiler = PassProfiler()
+
+        # Bind UBOs once at initialization
+        self.ubo_manager.bind_all()
+
+    def _timed_run(self, name: str, shader: moderngl.ComputeShader, **kwargs) -> None:
+        """Dispatch *shader* while recording elapsed ms under *name*."""
+        t0 = time.perf_counter()
+        shader.run(**kwargs)
+        elapsed = (time.perf_counter() - t0) * 1000.0
+        self.profiler.record(name, elapsed)
+
+    def set_shaders(self, shaders: dict[str, moderngl.ComputeShader]) -> None:
         self.state_shader = shaders["state"]
         self.liquid_step_shader = shaders["liquid_step"]
         self.heat_shader = shaders["heat"]
@@ -56,19 +103,10 @@ class Pipeline:
         self.render_shader = shaders["render"]
         self.acoustic_pressure_shader = shaders["acoustic_pressure"]
         self.acoustic_velocity_shader = shaders["acoustic_velocity"]
-
-        # Ceil-dispatch so edges are always covered
-        self.gx = (self.width + 15) // 16
-        self.gy = (self.height + 15) // 16
-
-        # Display blit program
-        self._build_display_program()
-        self.last_step_ms = 0.0
-        self.last_render_ms = 0.0
-        self._frame = 0
-
-        # Bind UBOs once at initialization
-        self.ubo_manager.bind_all()
+        self.electricity_shader = shaders["electricity"]
+        self.electricity_arc_shader = shaders["electricity_arc"]
+        self.biology_shader = shaders["biology"]
+        self.weather_shader = shaders["weather"]
 
     # ── Display blit setup ──────────────────────────────────────────────────
 
@@ -214,63 +252,63 @@ class Pipeline:
 
         for _ in range(adaptive_substeps):
             # 1. State / reactions (no movement)
-            self.buffers.temp_a.bind_to_image(11, read=True, write=False, level=0, format=_FMT_R32F)
-            self.buffers.temp_b.bind_to_image(12, read=False, write=True, level=0, format=_FMT_R32F)
+            self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+            self.buffers.temp_b.bind_to_image(IMAGE_TEMPERATURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
             self._set_common_uniforms(self.state_shader)
-            self.state_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+            self._timed_run("state", self.state_shader, group_x=self.gx, group_y=self.gy, group_z=1)
             self.ctx.memory_barrier()
             self.buffers.swap_temp_buffers()
             self.buffers.swap_cell_buffers()
 
             # 1.5. Liquid physics (density separation, viscosity, surface tension)
-            self.buffers.temp_a.bind_to_image(11, read=True, write=False, level=0, format=_FMT_R32F)
-            self.buffers.temp_b.bind_to_image(12, read=False, write=True, level=0, format=_FMT_R32F)
+            self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+            self.buffers.temp_b.bind_to_image(IMAGE_TEMPERATURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
             self._set_common_uniforms(self.liquid_step_shader)
-            self.liquid_step_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+            self._timed_run("liquid_step", self.liquid_step_shader, group_x=self.gx, group_y=self.gy, group_z=1)
             self.ctx.memory_barrier()
             self.buffers.swap_temp_buffers()
             self.buffers.swap_cell_buffers()
 
             # 2. Heat diffusion
             if not self.config.no_thermal and self.config.heat_diffusion_iterations > 0:
-                self.buffers.get_read_buf().bind_to_storage_buffer(0)
-                self.buffers.temp_a.bind_to_image(11, read=True, write=False, level=0, format=_FMT_R32F)
-                self.buffers.temp_b.bind_to_image(12, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
+                self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.temp_b.bind_to_image(IMAGE_TEMPERATURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
                 self._set_common_uniforms(self.heat_shader)
                 self._set_if(self.heat_shader, "ambientTemp", float(TEMP_AMBIENT))
                 self._set_if(self.heat_shader, "dt", dt)
                 for heat_iter in range(self.config.heat_diffusion_iterations):
-                    self.heat_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+                    self._timed_run("heat", self.heat_shader, group_x=self.gx, group_y=self.gy, group_z=1)
                     self.ctx.memory_barrier()
                     self.buffers.swap_temp_buffers()
 
             # 3. Compute vorticity for confinement
             if not self.config.no_turbulence and self.config.vorticity_confinement > 0.0:
-                self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-                self.buffers.vorticity_tex.bind_to_image(8, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+                self.buffers.vorticity_tex.bind_to_image(IMAGE_VORTICITY, read=False, write=True, level=0, format=_FMT_R32F)
                 self._set_common_uniforms(self.vorticity_shader)
                 self._set_if(self.vorticity_shader, "confinementStrength", self.config.vorticity_confinement)
-                self.vorticity_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+                self._timed_run("vorticity", self.vorticity_shader, group_x=self.gx, group_y=self.gy, group_z=1)
                 self.ctx.memory_barrier()
 
             # 4. Semi-Lagrangian BFECC advection for velocity and temperature
-            self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-            self.buffers.vel_b.bind_to_image(4, read=False, write=True, level=0, format=_FMT_RG32F)
-            self.buffers.temp_a.bind_to_image(11, read=True, write=False, level=0, format=_FMT_R32F)
-            self.buffers.temp_b.bind_to_image(12, read=False, write=True, level=0, format=_FMT_R32F)
+            self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+            self.buffers.vel_b.bind_to_image(IMAGE_VELOCITY_OUT, read=False, write=True, level=0, format=_FMT_RG32F)
+            self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+            self.buffers.temp_b.bind_to_image(IMAGE_TEMPERATURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
             self._set_common_uniforms(self.vel_advect_shader)
             self._set_if(self.vel_advect_shader, "dt", dt)
             self._set_if(self.vel_advect_shader, "enableBFECC", int(self.config.use_maccormack))
-            self.vel_advect_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+            self._timed_run("velocity_advect", self.vel_advect_shader, group_x=self.gx, group_y=self.gy, group_z=1)
             self.ctx.memory_barrier()
             self.buffers.swap_velocity_buffers()
             self.buffers.swap_temp_buffers()
 
             # 5. Forces → velocity (gravity, buoyancy, confinement)
-            self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-            self.buffers.vorticity_tex.bind_to_image(8, read=True, write=False, level=0, format=_FMT_R32F)
-            self.buffers.temp_a.bind_to_image(11, read=True, write=False, level=0, format=_FMT_R32F)
-            self.buffers.vel_b.bind_to_image(4, read=False, write=True, level=0, format=_FMT_RG32F)
+            self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+            self.buffers.vorticity_tex.bind_to_image(IMAGE_VORTICITY, read=True, write=False, level=0, format=_FMT_R32F)
+            self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+            self.buffers.vel_b.bind_to_image(IMAGE_VELOCITY_OUT, read=False, write=True, level=0, format=_FMT_RG32F)
             self._set_common_uniforms(self.force_shader)
             self._set_if(self.force_shader, "gravity", self.config.gravity)
             self._set_if(self.force_shader, "dt", dt)
@@ -282,46 +320,119 @@ class Pipeline:
             self._set_if(self.force_shader, "explosionForce", explosion_state.force)
             self._set_if(self.force_shader, "explosionIsActive", int(explosion_state.is_active))
             self._set_if(self.force_shader, "windVector", wind_state.get_vector())
-            self.force_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+            self._timed_run("force", self.force_shader, group_x=self.gx, group_y=self.gy, group_z=1)
             self.ctx.memory_barrier()
             self.buffers.swap_velocity_buffers()
 
             # 6. Divergence calculation
-            self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-            self.buffers.div_tex.bind_to_image(4, read=False, write=True, level=0, format=_FMT_R32F)
+            self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+            self.buffers.div_tex.bind_to_image(IMAGE_DIVERGENCE, read=False, write=True, level=0, format=_FMT_R32F)
             self._set_common_uniforms(self.divergence_shader)
-            self.divergence_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+            self._timed_run("divergence", self.divergence_shader, group_x=self.gx, group_y=self.gy, group_z=1)
             self.ctx.memory_barrier()
 
             # 7. Pressure Jacobi iterations (red-black Gauss-Seidel)
             for i in range(pressure_iterations):
-                self.buffers.div_tex.bind_to_image(4, read=True, write=False, level=0, format=_FMT_R32F)
-                self.buffers.pres_a.bind_to_image(5, read=True, write=False, level=0, format=_FMT_R32F)
-                self.buffers.pres_b.bind_to_image(6, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.div_tex.bind_to_image(IMAGE_DIVERGENCE, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.pres_a.bind_to_image(IMAGE_PRESSURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.pres_b.bind_to_image(IMAGE_PRESSURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
                 self._set_common_uniforms(self.pressure_shader)
                 self._set_if(self.pressure_shader, "iteration", i)
-                self.pressure_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+                self._timed_run("pressure", self.pressure_shader, group_x=self.gx, group_y=self.gy, group_z=1)
                 self.ctx.memory_barrier()
                 self.buffers.swap_pressure_buffers()
 
             # 8. Projection: v -= grad(p)
-            self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-            self.buffers.pres_a.bind_to_image(5, read=True, write=False, level=0, format=_FMT_R32F)
-            self.buffers.vel_b.bind_to_image(4, read=False, write=True, level=0, format=_FMT_RG32F)
+            self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+            self.buffers.pres_a.bind_to_image(IMAGE_PRESSURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+            self.buffers.vel_b.bind_to_image(IMAGE_VELOCITY_OUT, read=False, write=True, level=0, format=_FMT_RG32F)
             self._set_common_uniforms(self.project_shader)
-            self.project_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+            self._timed_run("project", self.project_shader, group_x=self.gx, group_y=self.gy, group_z=1)
             self.ctx.memory_barrier()
             self.buffers.swap_velocity_buffers()
 
-            # 9. Acoustic solver loop (weakly-compressible gas)
+            # 9. Electricity propagation
+            if not getattr(self.config, "no_electricity", True):
+                self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
+                self.buffers.charge_a.bind_to_image(IMAGE_CHARGE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.charge_b.bind_to_image(IMAGE_CHARGE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
+                self._set_common_uniforms(self.electricity_shader)
+                self._set_if(self.electricity_shader, "dt", dt)
+                self._set_if(self.electricity_shader, "chargeDecay", getattr(self.config, "charge_decay", 0.0))
+                self._set_if(self.electricity_shader, "maxCharge", getattr(self.config, "max_charge", 1000.0))
+                self._timed_run("electricity", self.electricity_shader, group_x=self.gx, group_y=self.gy, group_z=1)
+                self.ctx.memory_barrier()
+                self.buffers.swap_charge_buffers()
+
+                # 9b. Electricity arc breakdown
+                self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
+                self.buffers.charge_a.bind_to_image(IMAGE_CHARGE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.charge_b.bind_to_image(IMAGE_CHARGE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.temp_b.bind_to_image(IMAGE_TEMPERATURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.div_tex.bind_to_image(IMAGE_DIVERGENCE, read=False, write=True, level=0, format=_FMT_R32F)
+                self._set_common_uniforms(self.electricity_arc_shader)
+                self._set_if(self.electricity_arc_shader, "dt", dt)
+                self._set_if(self.electricity_arc_shader, "breakdownThreshold", getattr(self.config, "breakdown_threshold", 500.0))
+                self._set_if(self.electricity_arc_shader, "arcTempDelta", getattr(self.config, "arc_temp_delta", 200.0))
+                self._set_if(self.electricity_arc_shader, "arcPressurePulse", getattr(self.config, "arc_pressure_pulse", 5.0))
+                self._timed_run("electricity_arc", self.electricity_arc_shader, group_x=self.gx, group_y=self.gy, group_z=1)
+                self.ctx.memory_barrier()
+                self.buffers.swap_charge_buffers()
+                self.buffers.swap_temp_buffers()
+
+            # 10. Biology / ecology
+            if not getattr(self.config, "no_biology", True):
+                self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
+                self.buffers.nutrient_a.bind_to_image(IMAGE_NUTRIENT_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.nutrient_b.bind_to_image(IMAGE_NUTRIENT_OUT, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.moisture_a.bind_to_image(IMAGE_MOISTURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.moisture_b.bind_to_image(IMAGE_MOISTURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self._set_common_uniforms(self.biology_shader)
+                self._set_if(self.biology_shader, "dt", dt)
+                self._set_if(self.biology_shader, "nutrientDiffuseRate", getattr(self.config, "nutrient_diffuse_rate", 0.5))
+                self._set_if(self.biology_shader, "moistureDiffuseRate", getattr(self.config, "moisture_diffuse_rate", 0.3))
+                self._set_if(self.biology_shader, "moistureEvapRate", getattr(self.config, "moisture_evap_rate", 0.02))
+                self._set_if(self.biology_shader, "growthRate", getattr(self.config, "growth_rate", 0.1))
+                self._set_if(self.biology_shader, "decayRate", getattr(self.config, "decay_rate", 0.05))
+                self._set_if(self.biology_shader, "nutrientConsumeRate", getattr(self.config, "nutrient_consume_rate", 0.2))
+                self._set_if(self.biology_shader, "moistureConsumeRate", getattr(self.config, "moisture_consume_rate", 0.15))
+                self._set_if(self.biology_shader, "waterMoistureBoost", getattr(self.config, "water_moisture_boost", 5.0))
+                self._set_if(self.biology_shader, "dirtNutrientRegen", getattr(self.config, "dirt_nutrient_regen", 0.01))
+                self._timed_run("biology", self.biology_shader, group_x=self.gx, group_y=self.gy, group_z=1)
+                self.ctx.memory_barrier()
+                self.buffers.swap_nutrient_buffers()
+                self.buffers.swap_moisture_buffers()
+
+            # 11. Weather / atmospheric
+            if not getattr(self.config, "no_weather", True):
+                self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
+                self.buffers.humidity_a.bind_to_image(IMAGE_HUMIDITY_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.humidity_b.bind_to_image(IMAGE_HUMIDITY_OUT, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self._set_common_uniforms(self.weather_shader)
+                self._set_if(self.weather_shader, "dt", dt)
+                self._set_if(self.weather_shader, "humidityDiffuseRate", getattr(self.config, "humidity_diffuse_rate", 0.4))
+                self._set_if(self.weather_shader, "evaporationRate", getattr(self.config, "evaporation_rate", 0.1))
+                self._set_if(self.weather_shader, "condensationRate", getattr(self.config, "condensation_rate", 0.3))
+                self._set_if(self.weather_shader, "saturationThreshold", getattr(self.config, "saturation_threshold", 100.0))
+                self._set_if(self.weather_shader, "rainSpeed", getattr(self.config, "rain_speed", 2.0))
+                self._set_if(self.weather_shader, "windAdvectStrength", getattr(self.config, "wind_advect_strength", 0.5))
+                self._set_if(self.weather_shader, "windVector", getattr(self.config, "wind_vector", (0.0, 0.0)))
+                self._timed_run("weather", self.weather_shader, group_x=self.gx, group_y=self.gy, group_z=1)
+                self.ctx.memory_barrier()
+                self.buffers.swap_humidity_buffers()
+
+            # 12. Acoustic solver loop (weakly-compressible gas)
             if not self.config.no_acoustics:
                 acoustic_substeps = self.config.acoustic_substeps
                 dt_ac = dt / max(1, acoustic_substeps)
                 for sub_i in range(acoustic_substeps):
                     # 9a. Acoustic pressure step
-                    self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-                    self.buffers.pres_a.bind_to_image(5, read=True, write=False, level=0, format=_FMT_R32F)
-                    self.buffers.pres_b.bind_to_image(6, read=False, write=True, level=0, format=_FMT_R32F)
+                    self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+                    self.buffers.pres_a.bind_to_image(IMAGE_PRESSURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                    self.buffers.pres_b.bind_to_image(IMAGE_PRESSURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
                     self._set_common_uniforms(self.acoustic_pressure_shader)
                     self._set_if(self.acoustic_pressure_shader, "soundSpeed", self.config.sound_speed)
                     self._set_if(self.acoustic_pressure_shader, "dtAcoustic", dt_ac)
@@ -334,18 +445,18 @@ class Pipeline:
                     self._set_if(self.acoustic_pressure_shader, "explosionType", explosion_state.explosion_type)
                     self._set_if(self.acoustic_pressure_shader, "energyDecayRate", 0.15)
                     self._set_if(self.acoustic_pressure_shader, "reflectionDamping", 0.3)
-                    self.acoustic_pressure_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+                    self._timed_run("acoustic_pressure", self.acoustic_pressure_shader, group_x=self.gx, group_y=self.gy, group_z=1)
                     self.ctx.memory_barrier()
                     self.buffers.swap_pressure_buffers()
 
                     # 9b. Acoustic velocity step
-                    self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-                    self.buffers.pres_a.bind_to_image(5, read=True, write=False, level=0, format=_FMT_R32F)
-                    self.buffers.vel_b.bind_to_image(4, read=False, write=True, level=0, format=_FMT_RG32F)
+                    self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+                    self.buffers.pres_a.bind_to_image(IMAGE_PRESSURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                    self.buffers.vel_b.bind_to_image(IMAGE_VELOCITY_OUT, read=False, write=True, level=0, format=_FMT_RG32F)
                     self._set_common_uniforms(self.acoustic_velocity_shader)
                     self._set_if(self.acoustic_velocity_shader, "dtAcoustic", dt_ac)
                     self._set_if(self.acoustic_velocity_shader, "ambientPressure", self.config.atm_pressure)
-                    self.acoustic_velocity_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+                    self._timed_run("acoustic_velocity", self.acoustic_velocity_shader, group_x=self.gx, group_y=self.gy, group_z=1)
                     self.ctx.memory_barrier()
                     self.buffers.swap_velocity_buffers()
 
@@ -353,12 +464,12 @@ class Pipeline:
             #     Carries float temperature alongside cell moves.
             self.buffers.clear_reservations()
             self.buffers.clear_write_buf_to_air()
-            self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-            self.buffers.temp_a.bind_to_image(11, read=True, write=False, level=0, format=_FMT_R32F)
-            self.buffers.temp_b.bind_to_image(12, read=False, write=True, level=0, format=_FMT_R32F)
+            self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+            self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+            self.buffers.temp_b.bind_to_image(IMAGE_TEMPERATURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
             self._set_common_uniforms(self.advect_shader)
             self._set_if(self.advect_shader, "dt", dt)
-            self.advect_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+            self._timed_run("advect", self.advect_shader, group_x=self.gx, group_y=self.gy, group_z=1)
             self.ctx.memory_barrier()
             self.buffers.swap_cell_buffers()
             self.buffers.swap_temp_buffers()
@@ -369,21 +480,27 @@ class Pipeline:
         self,
         show_pressure: bool,
         explosion_vfx_state: ExplosionVfxState,
+        debug_view: int = 0,
     ) -> None:
         """Render cells into display_texture and blit to the default framebuffer."""
-        self.buffers.get_read_buf().bind_to_storage_buffer(0)
-        self.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-        self.buffers.pres_a.bind_to_image(5, read=True, write=False, level=0, format=_FMT_R32F)
-        self.buffers.temp_a.bind_to_image(11, read=True, write=False, level=0, format=_FMT_R32F)
-        self.buffers.display_texture.bind_to_image(7, read=False, write=True, level=0, format=_FMT_RGBA8)
+        self.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
+        self.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+        self.buffers.pres_a.bind_to_image(IMAGE_PRESSURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+        self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+        self.buffers.charge_a.bind_to_image(IMAGE_CHARGE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+        self.buffers.nutrient_a.bind_to_image(IMAGE_NUTRIENT_IN, read=True, write=False, level=0, format=_FMT_R32F)
+        self.buffers.moisture_a.bind_to_image(IMAGE_MOISTURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+        self.buffers.humidity_a.bind_to_image(IMAGE_HUMIDITY_IN, read=True, write=False, level=0, format=_FMT_R32F)
+        self.buffers.display_texture.bind_to_image(IMAGE_DISPLAY, read=False, write=True, level=0, format=_FMT_RGBA8)
         self._set_common_uniforms(self.render_shader)
         self._set_if(self.render_shader, "showPressure", int(show_pressure))
+        self._set_if(self.render_shader, "debugView", debug_view)
         self._set_if(self.render_shader, "ambientPressure", self.config.atm_pressure)
         self._set_if(self.render_shader, "explosionFlash", float(explosion_vfx_state.flash))
         self._set_if(self.render_shader, "explosionCenter", explosion_vfx_state.center)
         self._set_if(self.render_shader, "explosionAge", float(explosion_vfx_state.age))
         self._set_if(self.render_shader, "explosionMaxAge", float(explosion_vfx_state.max_age))
-        self.render_shader.run(group_x=self.gx, group_y=self.gy, group_z=1)
+        self._timed_run("render", self.render_shader, group_x=self.gx, group_y=self.gy, group_z=1)
         self.ctx.memory_barrier(moderngl.ALL_BARRIER_BITS)
 
         # Blit display_texture to screen

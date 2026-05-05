@@ -5,6 +5,8 @@ import numpy as np
 from typing import TYPE_CHECKING
 from dataclasses import dataclass
 
+from gpu.resources import UBO_EXPLOSION, UBO_EXPLOSION_VFX, UBO_SIM_CONFIG, UBO_WIND
+
 if TYPE_CHECKING:
     pass
 
@@ -132,10 +134,10 @@ class UBOManager:
 
     def bind_all(self) -> None:
         """Bind all UBOs to their binding points."""
-        self.sim_config_ubo.bind_to_uniform_block(3)
-        self.explosion_ubo.bind_to_uniform_block(4)
-        self.explosion_vfx_ubo.bind_to_uniform_block(5)
-        self.wind_ubo.bind_to_uniform_block(6)
+        self.sim_config_ubo.bind_to_uniform_block(UBO_SIM_CONFIG)
+        self.explosion_ubo.bind_to_uniform_block(UBO_EXPLOSION)
+        self.explosion_vfx_ubo.bind_to_uniform_block(UBO_EXPLOSION_VFX)
+        self.wind_ubo.bind_to_uniform_block(UBO_WIND)
 
     def update_sim_config(self, data: SimConfigData) -> None:
         """Update simulation config UBO."""

@@ -56,6 +56,7 @@ class SimulationEngine:
 
         self.frame = 0
         self._show_pressure_overlay: bool = False
+        self._debug_view: int = 0  # 0=none, 1=pressure, 2=charge, 3=nutrient, 4=moisture, 5=humidity
 
     # ── Setup ────────────────────────────────────────────────────────────────
 
@@ -118,6 +119,11 @@ class SimulationEngine:
         self._show_pressure_overlay = not self._show_pressure_overlay
         return self._show_pressure_overlay
 
+    def cycle_debug_view(self) -> int:
+        """Cycle through debug overlay views. Returns new view id."""
+        self._debug_view = (self._debug_view + 1) % 6
+        return self._debug_view
+
     def step(self, dt: float = 0.016) -> None:
         self.pipeline.step(dt, self.frame, self.explosion_state, self.explosion_vfx_state, self.wind_state)
         self.frame += 1
@@ -126,10 +132,15 @@ class SimulationEngine:
 
     def render(self) -> None:
         """Render cells into display_texture and blit to the default framebuffer."""
-        self.pipeline.render(self._show_pressure_overlay, self.explosion_vfx_state)
+        self.pipeline.render(self._show_pressure_overlay, self.explosion_vfx_state, self._debug_view)
 
     def get_display_texture(self):
         return self.buffers.display_texture
+
+    def reload_shaders(self) -> dict[str, object]:
+        shaders = load_all_shaders(self.ctx)
+        self.pipeline.set_shaders(shaders)
+        return shaders
 
     # ── Save/load ────────────────────────────────────────────────────────────
 
@@ -235,6 +246,38 @@ class SimulationEngine:
             result["divergence"] = float(div_array[0])
         except Exception:
             result["divergence"] = None
+
+        # Read charge texture (1 texel, r32f)
+        try:
+            charge_data = self.buffers.charge_a.read(viewport=(gx, gy, 1, 1))
+            charge_array = np.frombuffer(charge_data, dtype=np.float32)
+            result["charge"] = float(charge_array[0])
+        except Exception:
+            result["charge"] = None
+
+        # Read nutrient texture (1 texel, r32f)
+        try:
+            nut_data = self.buffers.nutrient_a.read(viewport=(gx, gy, 1, 1))
+            nut_array = np.frombuffer(nut_data, dtype=np.float32)
+            result["nutrient"] = float(nut_array[0])
+        except Exception:
+            result["nutrient"] = None
+
+        # Read moisture texture (1 texel, r32f)
+        try:
+            moist_data = self.buffers.moisture_a.read(viewport=(gx, gy, 1, 1))
+            moist_array = np.frombuffer(moist_data, dtype=np.float32)
+            result["moisture"] = float(moist_array[0])
+        except Exception:
+            result["moisture"] = None
+
+        # Read humidity texture (1 texel, r32f)
+        try:
+            hum_data = self.buffers.humidity_a.read(viewport=(gx, gy, 1, 1))
+            hum_array = np.frombuffer(hum_data, dtype=np.float32)
+            result["humidity"] = float(hum_array[0])
+        except Exception:
+            result["humidity"] = None
 
         # Get material object
         if result["cell"] is not None:

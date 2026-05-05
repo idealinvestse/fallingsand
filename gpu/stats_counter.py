@@ -4,6 +4,7 @@ import moderngl
 import numpy as np
 
 from core.constants import NUM_TYPES
+from gpu.resources import SSBO_CELLS_READ, SSBO_COUNTERS
 
 
 class GPUStatsCounter:
@@ -63,8 +64,8 @@ void main() {{
         self.counter_buf.write(np.zeros(NUM_TYPES, dtype=np.uint32).tobytes())
 
         # Bind buffers (binding 9 avoids clashing with pipeline slots 0..8)
-        cell_buffer.bind_to_storage_buffer(0)
-        self.counter_buf.bind_to_storage_buffer(9)
+        cell_buffer.bind_to_storage_buffer(SSBO_CELLS_READ)
+        self.counter_buf.bind_to_storage_buffer(SSBO_COUNTERS)
 
         # Set uniforms
         self.compute_shader["gridSize"] = (self.width, self.height)

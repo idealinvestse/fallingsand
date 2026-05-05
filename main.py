@@ -363,6 +363,10 @@ def main() -> None:
                     print(f"Pressure overlay: {'ON' if show else 'OFF'}")
                 elif ev.key == K_i:
                     inspector.toggle()
+                elif ev.key == K_TAB:
+                    view = engine.cycle_debug_view()
+                    names = ["off", "pressure", "charge", "nutrient", "moisture", "humidity"]
+                    print(f"Debug view: {names[view]}")
 
         # Mouse handling
         if paused:

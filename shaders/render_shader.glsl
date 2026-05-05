@@ -6,11 +6,16 @@ layout(rg32f, binding = 3) uniform readonly image2D velTex;
 layout(r32f,  binding = 5) uniform readonly image2D presTex;   // pressure for overlay
 layout(rgba8, binding = 7) uniform writeonly image2D displayTexture;
 layout(r32f, binding = 11) uniform readonly image2D tempTex;
+layout(r32f, binding = 9)  uniform readonly image2D chargeTex;
+layout(r32f, binding = 13) uniform readonly image2D nutrientTex;
+layout(r32f, binding = 15) uniform readonly image2D moistureTex;
+layout(r32f, binding = 17) uniform readonly image2D humidityTex;
 
 uniform uvec2 gridSize;
 uniform uint frame;
 uniform uint ruleStride;
 uniform int showPressure;     // 1 = pressure overlay on gas cells
+uniform int debugView;        // 0=none, 1=pressure, 2=charge, 3=nutrient, 4=moisture, 5=humidity
 uniform float ambientPressure;  // for normalising pressure overlay
 uniform float ambientTemp;      // for temperature remapping
 
@@ -132,20 +137,114 @@ void main(){
     }
 
     // ═══════════════════════════════════════════════════════════════════════════
-    // PRESSURE OVERLAY: show acoustic pressure in gas cells as blue→red heatmap
+    // AMBIENT OCCLUSION: darken cells below solid surfaces
     // ═══════════════════════════════════════════════════════════════════════════
-    if(showPressure == 1 && rr.cat == 0){
-        float pVal = imageLoad(presTex, p).r;
-        // Normalise: ambient = 0.5, ±10 deviation maps to full color range
-        float pNorm = clamp((pVal - ambientPressure) * 0.05 + 0.5, 0.0, 1.0);
-        // Blue (low) → white (ambient) → red (high)
-        vec3 pCol;
-        if(pNorm < 0.5){
-            pCol = mix(vec3(0.0, 0.0, 0.8), vec3(0.9, 0.9, 1.0), pNorm * 2.0);
-        } else {
-            pCol = mix(vec3(1.0, 0.9, 0.9), vec3(0.8, 0.0, 0.0), (pNorm - 0.5) * 2.0);
+    ivec2 above = p + ivec2(0, -1);
+    if(inBounds(above, gridSize)){
+        uint aboveCell = cells[uint(above.y) * gridSize.x + uint(above.x)];
+        uint aboveTyp = getType(aboveCell);
+        Rule aboveRule = getRule(aboveTyp, ruleStride);
+        // If cell above is solid and current is not, apply AO shadow
+        if(aboveRule.cat == 3 && rr.cat != 3){
+            col *= 0.75;
         }
-        col = mix(col, pCol, 0.7);
+        // Stacked solids: darken based on how many solids above
+        if(rr.cat == 3 && aboveRule.cat == 3){
+            col *= 0.92;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // EMISSIVE LIGHT PROPAGATION: hot neighbors illuminate surroundings
+    // ═══════════════════════════════════════════════════════════════════════════
+    if(rr.cat != 3 || typ == T_LAVA){  // non-solids and lava receive light
+        vec3 lightSum = vec3(0.0);
+        float lightWeight = 0.0;
+        ivec2 neighbors[8] = {
+            ivec2(1,0), ivec2(-1,0), ivec2(0,1), ivec2(0,-1),
+            ivec2(1,1), ivec2(-1,1), ivec2(1,-1), ivec2(-1,-1)
+        };
+        for(int i = 0; i < 8; i++){
+            ivec2 np = p + neighbors[i];
+            if(!inBounds(np, gridSize)) continue;
+            float nt = imageLoad(tempTex, np).r;
+            float nGlow = smoothstep(150.0, 2000.0, nt);
+            if(nGlow > 0.01){
+                uint nCell = cells[uint(np.y) * gridSize.x + uint(np.x)];
+                Rule nRule = getRule(getType(nCell), ruleStride);
+                float dist = length(vec2(neighbors[i]));
+                float atten = nGlow * nRule.emit / (dist * dist + 0.5);
+                lightSum += blackbody(clamp((nt - ambientTemp) / 2000.0, 0.0, 1.0)) * atten;
+                lightWeight += atten;
+            }
+        }
+        if(lightWeight > 0.0){
+            col += lightSum / max(lightWeight, 0.01) * 0.4;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // WATER DEPTH: deeper water is darker/more saturated blue
+    // ═══════════════════════════════════════════════════════════════════════════
+    if(typ == T_WATER){
+        int depth = 0;
+        ivec2 below = p;
+        for(int d = 0; d < 8; d++){
+            below += ivec2(0, 1);
+            if(!inBounds(below, gridSize)) break;
+            if(getType(cells[uint(below.y) * gridSize.x + uint(below.x)]) == T_WATER) depth++;
+            else break;
+        }
+        float depthFactor = clamp(float(depth) / 6.0, 0.0, 1.0);
+        col = mix(col, col * vec3(0.3, 0.5, 0.9), depthFactor * 0.6);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    // DEBUG OVERLAY: visualize scalar fields as heatmaps
+    // ═══════════════════════════════════════════════════════════════════════════
+    int dv = debugView;
+    if(showPressure == 1 && dv == 0) dv = 1;  // backward compat
+
+    if(dv > 0){
+        float val = 0.0;
+        float maxVal = 1.0;
+        vec3 lowCol  = vec3(0.0, 0.0, 0.3);
+        vec3 highCol = vec3(1.0, 0.0, 0.0);
+
+        if(dv == 1){
+            // Pressure: blue→white→red
+            val = imageLoad(presTex, p).r;
+            float pNorm = clamp((val - ambientPressure) * 0.05 + 0.5, 0.0, 1.0);
+            vec3 pCol;
+            if(pNorm < 0.5){
+                pCol = mix(vec3(0.0, 0.0, 0.8), vec3(0.9, 0.9, 1.0), pNorm * 2.0);
+            } else {
+                pCol = mix(vec3(1.0, 0.9, 0.9), vec3(0.8, 0.0, 0.0), (pNorm - 0.5) * 2.0);
+            }
+            col = mix(col, pCol, 0.7);
+        } else if(dv == 2){
+            // Charge: black→yellow→white
+            val = imageLoad(chargeTex, p).r;
+            float cn = clamp(abs(val) / 500.0, 0.0, 1.0);
+            vec3 cCol = mix(vec3(0.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), smoothstep(0.0, 0.5, cn));
+            cCol = mix(cCol, vec3(1.0, 1.0, 1.0), smoothstep(0.5, 1.0, cn));
+            col = mix(col, cCol, 0.8);
+        } else if(dv == 3){
+            // Nutrient: brown→green
+            val = imageLoad(nutrientTex, p).r;
+            float nn = clamp(val / 200.0, 0.0, 1.0);
+            col = mix(vec3(0.1, 0.05, 0.0), vec3(0.0, 0.9, 0.1), nn);
+        } else if(dv == 4){
+            // Moisture: dry→wet (tan→blue)
+            val = imageLoad(moistureTex, p).r;
+            float mn = clamp(val / 200.0, 0.0, 1.0);
+            col = mix(vec3(0.4, 0.3, 0.1), vec3(0.0, 0.4, 1.0), mn);
+        } else if(dv == 5){
+            // Humidity: dry→humid (white→cyan)
+            val = imageLoad(humidityTex, p).r;
+            float hn = clamp(val / 200.0, 0.0, 1.0);
+            col = mix(vec3(0.15, 0.15, 0.2), vec3(0.0, 0.9, 1.0), hn);
+        }
     }
 
     col = clamp(col, 0.0, 1.0);

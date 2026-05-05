@@ -269,6 +269,6 @@ class TestInspectorIntegration:
         ndc_scale = kwargs["ndc_scale"]
 
         assert ndc_offset[0] == pytest.approx(0.075, abs=0.02)
-        assert ndc_offset[1] == pytest.approx(0.025, abs=0.02)
+        assert ndc_offset[1] == pytest.approx(-0.275, abs=0.02)
         assert ndc_scale[0] == pytest.approx(0.85, abs=0.001)
-        assert ndc_scale[1] == pytest.approx(0.9, abs=0.001)
+        assert ndc_scale[1] == pytest.approx(1.2, abs=0.001)

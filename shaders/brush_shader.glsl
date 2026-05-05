@@ -8,6 +8,8 @@ layout(std430, binding = 1) buffer WriteBuffer { uint cellsWrite[]; };
 
 layout(r32f, binding = 11) uniform image2D tempA;
 layout(r32f, binding = 12) uniform image2D tempB;
+layout(r32f, binding = 9)  uniform image2D chargeA;
+layout(r32f, binding = 10) uniform image2D chargeB;
 
 uniform uvec2 gridSize;
 uniform ivec2 brushCenter;
@@ -17,6 +19,7 @@ uniform uint brushMode;
 uniform float tempDelta;
 uniform float materialTemp;
 uniform uint materialLife;
+uniform float chargeDelta;
 
 uint getType(uint c) { return c & 0xFFu; }
 uint getLife(uint c) { return (c >> 8u) & 0xFFu; }
@@ -38,6 +41,11 @@ void writeBoth(uint idx, uint cell) {
 void writeTempBoth(ivec2 p, float temp) {
     imageStore(tempA, p, vec4(temp, 0.0, 0.0, 0.0));
     imageStore(tempB, p, vec4(temp, 0.0, 0.0, 0.0));
+}
+
+void writeChargeBoth(ivec2 p, float q) {
+    imageStore(chargeA, p, vec4(q, 0.0, 0.0, 0.0));
+    imageStore(chargeB, p, vec4(q, 0.0, 0.0, 0.0));
 }
 
 void main() {
@@ -64,5 +72,11 @@ void main() {
         float newTemp = max(0.0, oldTemp + tempDelta);
         writeBoth(idx, packCell(getType(cell), getLife(cell), getFlags(cell)));
         writeTempBoth(p, newTemp);
+    }
+
+    if (brushMode == 4u) {
+        float oldCharge = imageLoad(chargeA, p).r;
+        float newCharge = oldCharge + chargeDelta;
+        writeChargeBoth(p, newCharge);
     }
 }

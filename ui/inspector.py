@@ -17,7 +17,7 @@ class InspectorPanel:
 
         # Panel dimensions
         self.panel_width = 340
-        self.panel_height = 360
+        self.panel_height = 480
         self.margin = 15
 
         # State
@@ -195,6 +195,30 @@ class InspectorPanel:
                     y -= 42  # back up for second column
                 surface.blit(txt, (self.panel_width // 2 + 8, y))
                 y += 14
+        y += 4
+
+        # ── ECOLOGY ──
+        y = theme.section_header(surface, 12, y, "ECOLOGY", width=self.panel_width - 24)
+        charge = probe.get("charge")
+        if charge is not None:
+            charge_txt = theme.font(10).render(f"Charge: {charge:.1f}", True, theme.TEXT_BODY)
+            surface.blit(charge_txt, (16, y))
+            y += 14
+        nutrient = probe.get("nutrient")
+        if nutrient is not None:
+            nut_txt = theme.font(10).render(f"Nutrient: {nutrient:.1f}", True, theme.TEXT_BODY)
+            surface.blit(nut_txt, (16, y))
+            y += 14
+        moisture = probe.get("moisture")
+        if moisture is not None:
+            moist_txt = theme.font(10).render(f"Moisture: {moisture:.1f}", True, theme.TEXT_BODY)
+            surface.blit(moist_txt, (16, y))
+            y += 14
+        humidity = probe.get("humidity")
+        if humidity is not None:
+            hum_txt = theme.font(10).render(f"Humidity: {humidity:.1f}", True, theme.TEXT_BODY)
+            surface.blit(hum_txt, (16, y))
+            y += 14
 
         return surface
 
@@ -223,7 +247,11 @@ class InspectorPanel:
                 self.cached_probe.get("cell") != probe.get("cell") or
                 temp_changed or
                 self.cached_probe.get("velocity") != probe.get("velocity") or
-                self.cached_probe.get("pressure") != probe.get("pressure")
+                self.cached_probe.get("pressure") != probe.get("pressure") or
+                self.cached_probe.get("charge") != probe.get("charge") or
+                self.cached_probe.get("nutrient") != probe.get("nutrient") or
+                self.cached_probe.get("moisture") != probe.get("moisture") or
+                self.cached_probe.get("humidity") != probe.get("humidity")
             )
 
         if changed:

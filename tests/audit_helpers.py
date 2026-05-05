@@ -4,10 +4,18 @@ from dataclasses import dataclass
 from typing import Callable
 
 import numpy as np
+
 import pytest
 
 from core.config import SimulationConfig
 from core.constants import NUM_TYPES, TEMP_AMBIENT
+from gpu.resources import (
+    IMAGE_DISPLAY,
+    IMAGE_PRESSURE_IN,
+    IMAGE_TEMPERATURE_IN,
+    IMAGE_VELOCITY_IN,
+    SSBO_CELLS_READ,
+)
 from simulation.engine import SimulationEngine
 
 moderngl = pytest.importorskip("moderngl")
@@ -120,11 +128,11 @@ def snapshot(engine: SimulationEngine, include_display: bool = False) -> AuditSn
     divergence = np.frombuffer(engine.buffers.div_tex.read(), dtype=np.float32).reshape((height, width))
     display = None
     if include_display:
-        engine.buffers.get_read_buf().bind_to_storage_buffer(0)
-        engine.buffers.vel_a.bind_to_image(3, read=True, write=False, level=0, format=_FMT_RG32F)
-        engine.buffers.pres_a.bind_to_image(5, read=True, write=False, level=0, format=_FMT_R32F)
-        engine.buffers.temp_a.bind_to_image(11, read=True, write=False, level=0, format=_FMT_R32F)
-        engine.buffers.display_texture.bind_to_image(7, read=False, write=True, level=0, format=_FMT_RGBA8)
+        engine.buffers.get_read_buf().bind_to_storage_buffer(SSBO_CELLS_READ)
+        engine.buffers.vel_a.bind_to_image(IMAGE_VELOCITY_IN, read=True, write=False, level=0, format=_FMT_RG32F)
+        engine.buffers.pres_a.bind_to_image(IMAGE_PRESSURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+        engine.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+        engine.buffers.display_texture.bind_to_image(IMAGE_DISPLAY, read=False, write=True, level=0, format=_FMT_RGBA8)
         engine.pipeline._set_common_uniforms(engine.pipeline.render_shader)
         engine.pipeline._set_if(engine.pipeline.render_shader, "showPressure", int(engine._show_pressure_overlay))
         engine.pipeline._set_if(engine.pipeline.render_shader, "ambientPressure", engine.config.atm_pressure)

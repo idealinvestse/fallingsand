@@ -3,6 +3,8 @@
 import moderngl
 import numpy as np
 
+from gpu.resources import SSBO_CELLS_READ, SSBO_CELLS_WRITE, SSBO_RESERVATIONS, SSBO_RULES
+
 
 class BufferManager:
     """Manages GPU buffers for simulation (cell data, velocity, pressure)."""
@@ -43,6 +45,22 @@ class BufferManager:
         # Wind texture (rg16f) for environmental wind field
         self.wind_tex = ctx.texture((self.width, self.height), 2, dtype='f2')
 
+        # Charge textures (r32f) for electricity potential/charge field
+        self.charge_a = ctx.texture((self.width, self.height), 1, dtype='f4')
+        self.charge_b = ctx.texture((self.width, self.height), 1, dtype='f4')
+
+        # Nutrient textures (r32f) for biology/ecology nutrient field
+        self.nutrient_a = ctx.texture((self.width, self.height), 1, dtype='f4')
+        self.nutrient_b = ctx.texture((self.width, self.height), 1, dtype='f4')
+
+        # Moisture textures (r32f) for biology/ecology moisture field
+        self.moisture_a = ctx.texture((self.width, self.height), 1, dtype='f4')
+        self.moisture_b = ctx.texture((self.width, self.height), 1, dtype='f4')
+
+        # Humidity textures (r32f) for weather/atmospheric humidity
+        self.humidity_a = ctx.texture((self.width, self.height), 1, dtype='f4')
+        self.humidity_b = ctx.texture((self.width, self.height), 1, dtype='f4')
+
         # Reservation SSBO for conflict-free cell motion (advect pass)
         self.reservations_buf = ctx.buffer(reserve=self.cell_count * 4)
         self._zero_reservations = np.zeros(self.cell_count, dtype=np.uint32).tobytes()
@@ -62,6 +80,20 @@ class BufferManager:
         # Initialize wind to zero
         zero_wind = np.zeros((self.width, self.height, 2), dtype=np.float16)
         self.wind_tex.write(zero_wind.tobytes())
+
+        # Initialize charge to zero
+        zero_charge = np.zeros((self.width, self.height, 1), dtype=np.float32)
+        self.charge_a.write(zero_charge.tobytes())
+        self.charge_b.write(zero_charge.tobytes())
+
+        # Initialize nutrient and moisture to zero
+        zero_scalar = np.zeros((self.width, self.height, 1), dtype=np.float32)
+        self.nutrient_a.write(zero_scalar.tobytes())
+        self.nutrient_b.write(zero_scalar.tobytes())
+        self.moisture_a.write(zero_scalar.tobytes())
+        self.moisture_b.write(zero_scalar.tobytes())
+        self.humidity_a.write(zero_scalar.tobytes())
+        self.humidity_b.write(zero_scalar.tobytes())
 
         # Display texture
         self.display_texture = ctx.texture((self.width, self.height), 4, dtype='f1')
@@ -86,12 +118,12 @@ class BufferManager:
         # Bind cell buffers to binding points 0 (read) and 1 (write). Without this
         # initial bind, the first compute dispatch of every frame-0 pipeline runs
         # against unbound SSBOs, corrupting the grid before the first swap.
-        self.read_buf.bind_to_storage_buffer(0)
-        self.write_buf.bind_to_storage_buffer(1)
+        self.read_buf.bind_to_storage_buffer(SSBO_CELLS_READ)
+        self.write_buf.bind_to_storage_buffer(SSBO_CELLS_WRITE)
         # Bind rule buffer to binding point 2 (persistent)
-        self.rule_ssbo.bind_to_storage_buffer(2)
+        self.rule_ssbo.bind_to_storage_buffer(SSBO_RULES)
         # Bind reservations buffer to binding point 8 (used by advect pass)
-        self.reservations_buf.bind_to_storage_buffer(8)
+        self.reservations_buf.bind_to_storage_buffer(SSBO_RESERVATIONS)
 
     def clear_reservations(self) -> None:
         """Zero the reservations buffer. Call once per frame before advect."""
@@ -110,8 +142,8 @@ class BufferManager:
         """Swap read and write cell buffers."""
         self.read_buf, self.write_buf = self.write_buf, self.read_buf
         # Re-bind to maintain persistent binding point 0 and 1
-        self.read_buf.bind_to_storage_buffer(0)
-        self.write_buf.bind_to_storage_buffer(1)
+        self.read_buf.bind_to_storage_buffer(SSBO_CELLS_READ)
+        self.write_buf.bind_to_storage_buffer(SSBO_CELLS_WRITE)
 
     def swap_velocity_buffers(self) -> None:
         """Swap velocity buffers."""
@@ -128,6 +160,22 @@ class BufferManager:
     def swap_temp_buffers(self) -> None:
         """Swap temperature buffers."""
         self.temp_a, self.temp_b = self.temp_b, self.temp_a
+
+    def swap_charge_buffers(self) -> None:
+        """Swap charge/potential buffers."""
+        self.charge_a, self.charge_b = self.charge_b, self.charge_a
+
+    def swap_nutrient_buffers(self) -> None:
+        """Swap nutrient buffers."""
+        self.nutrient_a, self.nutrient_b = self.nutrient_b, self.nutrient_a
+
+    def swap_moisture_buffers(self) -> None:
+        """Swap moisture buffers."""
+        self.moisture_a, self.moisture_b = self.moisture_b, self.moisture_a
+
+    def swap_humidity_buffers(self) -> None:
+        """Swap humidity buffers."""
+        self.humidity_a, self.humidity_b = self.humidity_b, self.humidity_a
 
     def clear_mass_buffers(self) -> None:
         """Zero the mass buffers."""
@@ -156,6 +204,15 @@ class BufferManager:
         ambient_pres = np.full((self.width, self.height, 1), ambient_pressure, dtype=np.float32)
         self.pres_a.write(ambient_pres.tobytes())
         self.pres_b.write(ambient_pres.tobytes())
+        zero_charge = np.zeros((self.width, self.height, 1), dtype=np.float32)
+        self.charge_a.write(zero_charge.tobytes())
+        self.charge_b.write(zero_charge.tobytes())
+        self.nutrient_a.write(zero_scalar.tobytes())
+        self.nutrient_b.write(zero_scalar.tobytes())
+        self.moisture_a.write(zero_scalar.tobytes())
+        self.moisture_b.write(zero_scalar.tobytes())
+        self.humidity_a.write(zero_scalar.tobytes())
+        self.humidity_b.write(zero_scalar.tobytes())
 
     def get_read_buf(self) -> moderngl.Buffer:
         """Get current read buffer."""
@@ -225,6 +282,30 @@ class BufferManager:
         self.wind_tex = self.ctx.texture((new_width, new_height), 2, dtype='f2')
         zero_wind = np.zeros((new_width, new_height, 2), dtype=np.float16)
         self.wind_tex.write(zero_wind.tobytes())
+
+        # Recreate charge textures
+        self.charge_a = self.ctx.texture((new_width, new_height), 1, dtype='f4')
+        self.charge_b = self.ctx.texture((new_width, new_height), 1, dtype='f4')
+        zero_charge = np.zeros((new_width, new_height, 1), dtype=np.float32)
+        self.charge_a.write(zero_charge.tobytes())
+        self.charge_b.write(zero_charge.tobytes())
+
+        # Recreate nutrient and moisture textures
+        self.nutrient_a = self.ctx.texture((new_width, new_height), 1, dtype='f4')
+        self.nutrient_b = self.ctx.texture((new_width, new_height), 1, dtype='f4')
+        self.moisture_a = self.ctx.texture((new_width, new_height), 1, dtype='f4')
+        self.moisture_b = self.ctx.texture((new_width, new_height), 1, dtype='f4')
+        zero_scalar = np.zeros((new_width, new_height, 1), dtype=np.float32)
+        self.nutrient_a.write(zero_scalar.tobytes())
+        self.nutrient_b.write(zero_scalar.tobytes())
+        self.moisture_a.write(zero_scalar.tobytes())
+        self.moisture_b.write(zero_scalar.tobytes())
+
+        # Recreate humidity textures
+        self.humidity_a = self.ctx.texture((new_width, new_height), 1, dtype='f4')
+        self.humidity_b = self.ctx.texture((new_width, new_height), 1, dtype='f4')
+        self.humidity_a.write(zero_scalar.tobytes())
+        self.humidity_b.write(zero_scalar.tobytes())
 
         # Recreate display texture
         self.display_texture = self.ctx.texture((new_width, new_height), 4, dtype='f1')
