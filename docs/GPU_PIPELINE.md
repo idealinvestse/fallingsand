@@ -137,6 +137,146 @@ Bloom post-FX is applied after rendering (if enabled): extract → blur H → bl
 
 **Documentation**: See `docs/WEATHER.md`
 
+## v6.1 Deep System Interactions
+
+### Overview
+
+v6.1 introduces bidirectional coupling between previously isolated simulation subsystems: Electricity ↔ Fluid, Electricity ↔ Biology, Weather ↔ Fluid, and Biology ↔ Fluid. All interactions are physics-based and respect the existing double-buffered texture architecture.
+
+### Cross-System Data Flow
+
+| From System | To System | Mechanism | Pass Order Dependency |
+|-------------|-----------|-----------|---------------------|
+| Fluid (moisture) | Electricity | Moisture boosts conductivity in wet conductors | biology → electricity |
+| Electricity (charge) | Biology | Moderate charge stimulates growth, high charge causes damage | electricity → biology |
+| Electricity (charge) | Weather | Rain washes charge from surfaces | weather reads charge |
+| Weather (humidity) | Fluid | Condensation adds moisture to solid surfaces | weather → biology (moisture) |
+| Biology (nutrient) | Fluid | Nutrients advect with liquid velocity | liquid_step → biology |
+
+### Modified Pass Specifications
+
+#### electricity_step.glsl (v6.1)
+
+**New Reads**:
+- moisture_in (r32f, binding 15)
+- velocity_in (rg32f, binding 3)
+
+**New Uniforms**:
+- electricity_moisture_boost: Conductivity multiplier per moisture unit (default: 2.0)
+- wet_arc_temp_multiplier: Arc heat reduction when wet (default: 0.5)
+- electrolysis_strength: Charge transport via liquid velocity (default: 0.3)
+
+**Interaction Rules**:
+- Moisture-based conductivity: `effective_cond = base_cond × (1.0 + moisture × 2.0)`
+- Wet conductors propagate charge faster: `rate = 4.0 × (1.0 + moisture × 0.5)`
+- Electrolysis: Charged liquid cells transport charge downstream via velocity field
+
+#### electricity_arc.glsl (v6.1)
+
+**New Reads**:
+- moisture_in (r32f, binding 15)
+
+**New Uniforms**:
+- wet_arc_temp_multiplier: Arc heat reduction when wet (default: 0.5)
+
+**Interaction Rules**:
+- Wet arcs: Less heat (multiplied by 0.5 when fully wet), more pressure wave (2× when wet)
+- Discharge rate slower when wet: `discharge_rate = mix(1.0, 0.7, wetness)`
+
+#### biology_step.glsl (v6.1)
+
+**New Reads**:
+- charge_in (r32f, binding 9)
+
+**New Uniforms**:
+- biology_electro_stim: Growth boost from moderate charge (default: 0.3)
+- charge_damage_threshold: Charge level causing bio damage (default: 500.0)
+- charge_stim_range_low: Lower bound for electro-stimulation (default: 10.0)
+- charge_stim_range_high: Upper bound for electro-stimulation (default: 100.0)
+- temp_effect_multiplier: Global temperature coupling strength (default: 1.0)
+
+**Interaction Rules**:
+- Electro-stimulation: `growth_modifier = 1.0 + clamp(charge × 0.3, 0.0, 1.5)` for 10-100 charge
+- High charge damage: `growth_modifier = max(0.2, 1.0 - damage)` for charge > 500
+- Temperature coupling: `growth_modifier *= smoothstep(50.0, 150.0, temp)`
+
+#### weather_step.glsl (v6.1)
+
+**New Reads**:
+- moisture_in (r32f, binding 15)
+- charge_in (r32f, binding 9)
+
+**New Uniforms**:
+- condensation_temp_boost: Temperature effect on condensation (default: 2.0)
+- rain_charge_wash_rate: Charge dissipation from rain (default: 0.1)
+- rain_moisture_boost: Moisture added by rain (default: 50.0)
+- evap_temp_multiplier: Temperature coupling for evaporation (default: 1.0)
+
+**Interaction Rules**:
+- Surface condensation: `condensation_chance = clamp((humidity - 0.6) × 2.0 × temp_factor, 0.0, 0.15)`
+- Rain charge wash: Rain reduces charge on solid surfaces (visual effect)
+- Enhanced evaporation: Temperature-coupled evaporation rate
+
+#### liquid_step.glsl (v6.1)
+
+**New Reads**:
+- nutrient_in (r32f, binding 13)
+- velocity_in (rg32f, binding 3)
+
+**New Writes**:
+- nutrient_out (r32f, binding 14)
+
+**Interaction Rules**:
+- Nutrient advection: Semi-Lagrangian transport via velocity field
+- `nutrient_new = mix(nutrient_old, nutrient_upwind, min(velocity_magnitude × 0.5, 0.8))`
+- Water cells gain nutrients from flow: `nutrient = mix(nutrient, advectedNutrient, 0.7)`
+
+### Performance Impact
+
+Estimated GPU overhead on 1024×1024 grids: **5.5%** (within 5-8% budget)
+
+| Pass | Base Cost | v6.1 Addition |
+|------|-----------|---------------|
+| liquid_step | 1.0% | +0.3% |
+| electricity | 0.8% | +0.2% |
+| electricity_arc | 0.5% | +0.1% |
+| biology | 1.2% | +0.1% |
+| weather | 1.0% | +0.3% |
+| **Total** | 4.5% | +1.0% |
+
+### Configuration
+
+All v6.1 features controlled by `config.enable_deep_interactions` (default: True). Individual interaction parameters can be tuned via config:
+
+```python
+# Electricity + Fluid
+config.electricity_moisture_boost = 2.0
+config.wet_arc_temp_multiplier = 0.5
+config.electrolysis_strength = 0.3
+
+# Biology + Electricity
+config.biology_electro_stim = 0.3
+config.charge_damage_threshold = 500.0
+
+# Weather + Fluid
+config.condensation_temp_boost = 2.0
+config.rain_charge_wash_rate = 0.1
+
+# Temperature coupling
+config.temp_effect_multiplier = 1.0
+```
+
+### Memory Barriers
+
+Required after modified passes:
+- After electricity_step: charge texture written
+- After electricity_arc: charge, temperature, divergence written
+- After biology_step: nutrient, moisture written
+- After weather_step: humidity written
+- After liquid_step: cells, temperature, nutrient written
+
+---
+
 ## Bloom Post-FX
 
 ### Extract Pass

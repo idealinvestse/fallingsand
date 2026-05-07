@@ -48,9 +48,9 @@ DEFAULT_STEP_PASSES: tuple[ComputePass, ...] = (
     ComputePass(
         name="liquid_step",
         shader_key="liquid_step",
-        reads=("cells_read", "rules", "temperature_in"),
-        writes=("cells_write", "temperature_out"),
-        swaps=("cells", "temperature"),
+        reads=("cells_read", "rules", "temperature_in", "nutrient_in", "velocity_in"),
+        writes=("cells_write", "temperature_out", "nutrient_out"),
+        swaps=("cells", "temperature", "nutrient"),
     ),
     ComputePass(
         name="heat",
@@ -106,7 +106,7 @@ DEFAULT_STEP_PASSES: tuple[ComputePass, ...] = (
     ComputePass(
         name="electricity",
         shader_key="electricity",
-        reads=("cells_read", "rules", "charge_in"),
+        reads=("cells_read", "rules", "charge_in", "moisture_in", "velocity_in"),
         writes=("charge_out",),
         swaps=("charge",),
         optional=True,
@@ -114,7 +114,7 @@ DEFAULT_STEP_PASSES: tuple[ComputePass, ...] = (
     ComputePass(
         name="electricity_arc",
         shader_key="electricity_arc",
-        reads=("cells_read", "rules", "charge_in", "temperature_in"),
+        reads=("cells_read", "rules", "charge_in", "temperature_in", "moisture_in"),
         writes=("charge_out", "temperature_out", "divergence"),
         swaps=("charge", "temperature"),
         optional=True,
@@ -122,7 +122,7 @@ DEFAULT_STEP_PASSES: tuple[ComputePass, ...] = (
     ComputePass(
         name="biology",
         shader_key="biology",
-        reads=("cells_read", "rules", "nutrient_in", "moisture_in", "temperature_in"),
+        reads=("cells_read", "rules", "nutrient_in", "moisture_in", "temperature_in", "charge_in"),
         writes=("nutrient_out", "moisture_out"),
         swaps=("nutrient", "moisture"),
         optional=True,
@@ -130,7 +130,7 @@ DEFAULT_STEP_PASSES: tuple[ComputePass, ...] = (
     ComputePass(
         name="weather",
         shader_key="weather",
-        reads=("cells_read", "humidity_in", "temperature_in"),
+        reads=("cells_read", "humidity_in", "temperature_in", "moisture_in", "charge_in"),
         writes=("humidity_out",),
         swaps=("humidity",),
         optional=True,

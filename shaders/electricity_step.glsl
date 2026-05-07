@@ -18,12 +18,18 @@ layout(std430, binding = 0) readonly buffer CellBuffer { uint cells[]; };
 layout(r32f, binding = 9)  uniform readonly  image2D chargeIn;
 layout(r32f, binding = 10) uniform writeonly image2D chargeOut;
 layout(rg32f, binding = 3) uniform readonly  image2D velIn;  // Cross-system coupling
+layout(r32f, binding = 15) uniform readonly  image2D moistureIn;  // v6.1: Moisture for conductivity
 
 uniform uvec2 gridSize;
 uniform uint  ruleStride;
 uniform float dt;
 uniform float chargeDecay;      // per-frame exponential decay (0 = none)
 uniform float maxCharge;        // hard cap to prevent runaway
+
+// v6.1 Deep System Interactions uniforms
+uniform float electricity_moisture_boost;  // Default: 2.0 - conductivity multiplier per moisture
+uniform float wet_arc_temp_multiplier;     // Default: 0.5 - arc heat reduction when wet
+uniform float electrolysis_strength;         // Default: 0.3 - charge transport via liquid velocity
 
 float neighbourCharge(ivec2 p, float selfCharge){
     return inBounds(p, gridSize) ? imageLoad(chargeIn, p).r : selfCharge;
@@ -46,11 +52,16 @@ void main(){
 
     float q = imageLoad(chargeIn, p).r;
     vec2 v = imageLoad(velIn, p).xy;  // Cross-system coupling
+    float moisture = imageLoad(moistureIn, p).r;  // v6.1: Read moisture
 
     // Only propagate if this cell has any conductivity.
     // Insulators keep their charge frozen (useful for stored charge).
     float qNew = q;
     if(r.cond > 0.0){
+        // v6.1: Moisture-based conductivity boost (Rule A)
+        float moistureBoost = 1.0 + moisture * electricity_moisture_boost;
+        float effectiveCond = r.cond * moistureBoost;
+
         ivec2 pL = p + ivec2(-1, 0);
         ivec2 pR = p + ivec2( 1, 0);
         ivec2 pD = p + ivec2( 0,-1);
@@ -61,24 +72,36 @@ void main(){
         float qD = neighbourCharge(pD, q);
         float qU = neighbourCharge(pU, q);
 
-        float cL = neighbourCond(pL, r.cond);
-        float cR = neighbourCond(pR, r.cond);
-        float cD = neighbourCond(pD, r.cond);
-        float cU = neighbourCond(pU, r.cond);
+        // v6.1: Use moisture-enhanced conductivity for neighbors too
+        float cL = neighbourCond(pL, effectiveCond);
+        float cR = neighbourCond(pR, effectiveCond);
+        float cD = neighbourCond(pD, effectiveCond);
+        float cU = neighbourCond(pU, effectiveCond);
 
         // Flux proportional to conductivity-weighted charge gradient.
         // Harmonic mean of the two face conductivities gives correct
         // series resistance across a material boundary.
         float flux = 0.0;
-        float wL = (r.cond * cL) / max(r.cond + cL, 1e-6) * 2.0;
-        float wR = (r.cond * cR) / max(r.cond + cR, 1e-6) * 2.0;
-        float wD = (r.cond * cD) / max(r.cond + cD, 1e-6) * 2.0;
-        float wU = (r.cond * cU) / max(r.cond + cU, 1e-6) * 2.0;
+        float wL = (effectiveCond * cL) / max(effectiveCond + cL, 1e-6) * 2.0;
+        float wR = (effectiveCond * cR) / max(effectiveCond + cR, 1e-6) * 2.0;
+        float wD = (effectiveCond * cD) / max(effectiveCond + cD, 1e-6) * 2.0;
+        float wU = (effectiveCond * cU) / max(effectiveCond + cU, 1e-6) * 2.0;
         flux = wL*(qL - q) + wR*(qR - q) + wD*(qD - q) + wU*(qU - q);
 
-        // Explicit update with dt scaling; clamp for stability.
-        float rate = 4.0; // heuristic diffusion speed
+        // v6.1: Higher propagation speed when moisture is present (wet conductor effect)
+        float rate = 4.0 * (1.0 + moisture * 0.5);
         qNew = q + clamp(flux * rate * dt, -maxCharge, maxCharge);
+    }
+
+    // v6.1: Electrolysis - charged liquid cells conduct via velocity (Rule A part 2)
+    if(r.cat == 2 && length(v) > 0.5 && abs(q) > 10.0) {
+        ivec2 velDir = ivec2(int(sign(v.x)), int(sign(v.y)));
+        ivec2 target = p + velDir;
+        if(inBounds(target, gridSize)){
+            // Velocity field transports charge downstream
+            float transport = q * electrolysis_strength * length(v) * dt;
+            qNew -= transport;  // Lose charge to downstream
+        }
     }
 
     // Cross-system coupling: Velocity-dependent charge advection

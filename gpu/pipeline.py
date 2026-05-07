@@ -59,15 +59,14 @@ class Pipeline:
         ubo_manager: UBOManager,
         config: SimulationConfig,
         shaders: dict[str, moderngl.ComputeShader],
-        context: moderngl.Context,
+        grid_size: tuple[int, int],
     ):
         self.ctx = ctx
         self.buffers = buffers
         self.ubo_manager = ubo_manager
-        self.ctx = context
         self.config = config
-        self.width = config.width
-        self.height = config.height
+        self.width = grid_size[0]
+        self.height = grid_size[1]
         self.gx = (self.width + 31) // 32
         self.gy = (self.height + 31) // 32
         self.profiler = PassProfiler()
@@ -85,6 +84,12 @@ class Pipeline:
         self.step_passes: tuple[ComputePass, ...] = default_step_passes()
         self.render_passes: tuple[ComputePass, ...] = default_render_passes()
         self.profiler = PassProfiler()
+
+        # Initialize shader attributes
+        self.set_shaders(shaders)
+
+        # Build display program for rendering
+        self._build_display_program()
 
         # Ceil-dispatch so edges are always covered
         # Bind UBOs once at initialization

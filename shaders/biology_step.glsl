@@ -48,6 +48,13 @@ uniform float moistureConsumeRate;   // moisture consumed per growth
 uniform float waterMoistureBoost;    // moisture added by water cells
 uniform float dirtNutrientRegen;     // passive nutrient regen in dirt
 
+// v6.1 Deep System Interactions uniforms
+uniform float biology_electro_stim;       // Default: 0.3 - growth boost from moderate charge
+uniform float charge_damage_threshold;   // Default: 500.0 - charge level causing bio damage
+uniform float charge_stim_range_low;     // Default: 10.0 - lower bound for electro-stimulation
+uniform float charge_stim_range_high;    // Default: 100.0 - upper bound for electro-stimulation
+uniform float temp_effect_multiplier;    // Default: 1.0 - global temperature coupling strength
+
 // Bio material IDs defined in common.glsl
 
 bool isBio(uint typ){
@@ -124,22 +131,41 @@ void main(){
 
     // ── Bio growth / decay ───────────────────────────────────────────────
     if(isBio(typ)){
-        // Cross-system coupling: Electric fields affect growth
+        // v6.1: Cross-system coupling: Electric fields affect growth (Rule B)
+        float absCharge = abs(charge);
         float growthModifier = 1.0;
-        if(abs(charge) > 10.0 && abs(charge) < 100.0) {
-            growthModifier = 1.2;  // Moderate fields stimulate growth (20% boost)
-        } else if(abs(charge) > 500.0) {
-            growthModifier = 0.5;  // Strong fields inhibit growth (50% penalty)
+
+        if(absCharge > charge_stim_range_low && absCharge < charge_stim_range_high) {
+            // Electro-stimulation: moderate charge boosts growth
+            float stimStrength = (absCharge - charge_stim_range_low) / 
+                                (charge_stim_range_high - charge_stim_range_low);
+            growthModifier = 1.0 + clamp(stimStrength * biology_electro_stim, 0.0, 1.5);
+        } else if(absCharge > charge_damage_threshold) {
+            // High charge causes damage (breakdown threshold exceeded)
+            float damage = (absCharge - charge_damage_threshold) / charge_damage_threshold;
+            growthModifier = max(0.2, 1.0 - damage);  // At least 20% growth rate
         }
+
+        // v6.1: Temperature effect multiplier (Rule E)
+        float tempFactor = smoothstep(50.0, 150.0, temp) * temp_effect_multiplier;
+        growthModifier *= tempFactor;
 
         // Growth: needs nutrients, moisture, and warmth
         bool canGrow = nut > 0.1 && moist > 0.1 && temp > 100.0;
         if(canGrow){
-            nut   -= nutrientConsumeRate * growthRate * growthModifier * dt;
-            moist -= moistureConsumeRate * growthRate * growthModifier * dt;
+            float actualGrowth = growthRate * growthModifier * dt;
+            nut   -= nutrientConsumeRate * actualGrowth;
+            moist -= moistureConsumeRate * actualGrowth;
         } else {
             // Decay: bio dies without resources, returns nutrients
-            nut += decayRate * dt * 0.5;  // half of decay mass becomes nutrients
+            float actualDecay = decayRate * dt;
+            nut += actualDecay * 0.5;  // half of decay mass becomes nutrients
+
+            // v6.1: High charge accelerates decay (electrocution damage)
+            if(absCharge > charge_damage_threshold){
+                nut += actualDecay * 0.3;  // Additional nutrient release from damage
+                moist += actualDecay * 0.2;  // Cell fluid released
+            }
         }
     }
 

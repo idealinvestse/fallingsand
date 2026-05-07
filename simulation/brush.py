@@ -69,3 +69,36 @@ class BrushPainter:
         self.shader["materialLife"] = int(mat.default_flame_life)
         self.shader.run(group_x=(dispatch_size + 15) // 16, group_y=(dispatch_size + 15) // 16, group_z=1)
         self.buffers.ctx.memory_barrier()
+
+    def paint_cell(self, x: int, y: int, material_id: int) -> None:
+        """Paint a single cell with a material."""
+        self.apply_brush(x, y, 0, material_id, 3)  # Mode 3: single cell
+
+    def paint_charge(self, x: int, y: int, charge: float) -> None:
+        """Inject charge at a single cell."""
+        self.apply_brush(x, y, 0, 0, 4, charge_delta=charge)  # Mode 4: charge
+
+    def paint_nutrient(self, x: int, y: int, nutrient: float) -> None:
+        """Set nutrient value at a single cell (direct buffer write)."""
+        import numpy as np
+        nutrient_data = np.zeros((self.width, self.height), dtype=np.float32)
+        nutrient_data[y, x] = nutrient
+        self.buffers.nutrient_a.write(nutrient_data.tobytes())
+
+    def paint_moisture(self, x: int, y: int, moisture: float) -> None:
+        """Set moisture value at a single cell (direct buffer write)."""
+        import numpy as np
+        moisture_data = np.zeros((self.width, self.height), dtype=np.float32)
+        moisture_data[y, x] = moisture
+        self.buffers.moisture_a.write(moisture_data.tobytes())
+
+    def paint_temperature(self, x: int, y: int, temp: float) -> None:
+        """Set temperature at a single cell."""
+        self.apply_brush(x, y, 0, 0, 1, delta=temp - 96.0)  # Mode 1: temperature
+
+    def paint_humidity(self, x: int, y: int, humidity: float) -> None:
+        """Set humidity value at a single cell (direct buffer write)."""
+        import numpy as np
+        humidity_data = np.zeros((self.width, self.height), dtype=np.float32)
+        humidity_data[y, x] = humidity
+        self.buffers.humidity_a.write(humidity_data.tobytes())

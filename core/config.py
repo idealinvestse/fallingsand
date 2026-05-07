@@ -75,6 +75,29 @@ class SimulationConfig:
     ])
     transpiration_rate: float = 0.05
 
+    # v6.1 Deep System Interactions
+    enable_deep_interactions: bool = True  # Master switch for v6.1 features
+
+    # Electricity + Fluid interaction parameters
+    electricity_moisture_boost: float = 2.0       # Conductivity multiplier per moisture unit
+    wet_arc_temp_multiplier: float = 0.5          # Arc heat reduction when wet
+    electrolysis_strength: float = 0.3             # Charge transport via liquid velocity
+
+    # Biology + Electricity parameters
+    biology_electro_stim: float = 0.3             # Growth boost from moderate charge
+    charge_damage_threshold: float = 500.0        # Charge level causing bio damage
+    charge_stim_range_low: float = 10.0           # Lower bound for electro-stimulation
+    charge_stim_range_high: float = 100.0         # Upper bound for electro-stimulation
+
+    # Weather + Fluid parameters
+    condensation_temp_boost: float = 2.0          # Temperature effect on condensation
+    rain_charge_wash_rate: float = 0.1            # Charge dissipation from rain
+    rain_moisture_boost: float = 50.0             # Moisture added by rain
+    enhanced_evaporation: bool = True             # Temperature-coupled evaporation
+
+    # Temperature effect multipliers (shared across systems)
+    temp_effect_multiplier: float = 1.0           # Global temperature coupling strength
+
     # UI settings
     no_hud: bool = False
     no_stats: bool = False
@@ -92,17 +115,17 @@ class SimulationConfig:
             no_turbulence=args.no_turbulence,
             no_wet_dry=args.no_wet_dry,
             no_thermal=args.no_thermal,
-            gravity=args.gravity,
-            vorticity_confinement=args.vorticity_confinement,
-            surface_tension=args.surface_tension,
-            thermal_convection=args.thermal_convection,
+            gravity=getattr(args, "gravity", 0.0),
+            vorticity_confinement=getattr(args, "vorticity_confinement", 0.0),
+            surface_tension=getattr(args, "surface_tension", 0.0),
+            thermal_convection=getattr(args, "thermal_convection", 0.0),
             heat_diffusion_iterations=args.heat_diffusion_iterations,
             use_maccormack=not args.no_maccormack,
             powder_friction=args.powder_friction,
             angle_of_repose_deg=args.angle_of_repose_deg,
             capillary_strength=args.capillary_strength,
             wind_field=args.wind_field,
-            adaptive_substeps=args.adaptive_substeps,
+            adaptive_substeps=getattr(args, "adaptive_substeps", False),
             perf_overlay=args.perf,
             no_acoustics=args.no_acoustics,
             sound_speed=args.sound_speed,

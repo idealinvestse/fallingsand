@@ -3,7 +3,7 @@
 import pygame
 from collections import deque
 from ui.overlay import OverlayRenderer
-import core.theme as theme
+import ui.theme as theme
 
 
 class PerformanceOverlay(OverlayRenderer):
