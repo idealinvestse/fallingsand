@@ -8,6 +8,20 @@ Consolidated implementation history for the Falling Sand simulation.
 
 #### Critical Bug Fixes & Stability Polish
 
+- **Shader compilation fixes**:
+  - Fixed duplicate `#version` directives: Modified gpu/shader_registry.py to remove `#version` from individual shaders when common.glsl is prepended (GLSL requires `#version` only once at the top)
+  - Fixed undeclared variables in state_shader.glsl: Moved declarations of `blastSrcOff`, `blastSrcPow`, `nearHot`, `nearMagnet`, and `nearMagnetSouth` earlier in the shader before first use
+  - Fixed missing uniform declaration: Added `velIn` uniform declaration to state_shader.glsl
+  - Fixed duplicate variable declaration: Removed duplicate `pC` declaration in pressure_shader.glsl
+
+- **Persistence manager initialization**:
+  - Fixed buffers not being set: Changed PersistenceManager constructor to accept buffers as a required parameter instead of leaving it as None
+  - Removed unused Optional typing from persistence.py after buffers became required
+
+- **Brush index bounds**:
+  - Fixed brush index out of range error: Changed brush wrapping from `NUM_TYPES` constant (61) to actual material count from `get_all_materials()`
+  - Removed unused NUM_TYPES import from main.py
+
 - **Pressure solver stabilization**:
   - Enhanced clamping bounds: increased from -100.0/1000.0 to -500.0/5000.0 in pressure_shader.glsl
   - Emergency reset detection: PRESSURE_EMERGENCY_RESET = 10000.0 with fallback to previous pressure

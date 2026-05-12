@@ -355,3 +355,7 @@ Shaders must bounds-check global invocation coordinates.
 ## Binding Contract
 
 The detailed binding table lives in `shaders/BUFFER_BINDINGS.md`. Any new buffer, image, or UBO must be added there and covered by static tests where possible.
+
+## Shader Loading
+
+Shaders are loaded via `gpu/shader_registry.py` using a manifest-based system. The loader prepends `common.glsl` (which contains the `#version 430` directive and shared definitions) to individual shader files. Individual shader files must NOT include their own `#version` directive, as the loader removes it to prevent GLSL compilation errors from duplicate directives. The shader registry validates all shaders at startup and supports runtime reloading for context recovery.

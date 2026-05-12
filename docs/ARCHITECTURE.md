@@ -26,8 +26,7 @@ Falling Sand is organized around a Python runtime shell and a GPU-resident simul
    - `simulation/materials.yaml` is the material source of truth.
    - `simulation/materials.py` validates the registry and creates the GPU rule buffer.
    - `simulation/state.py` owns runtime explosion, VFX, and wind state.
-   - `simulation/persistence.py` owns save/load/undo behavior.
-
+   - `simulation/persistence.py` manages save/load/undo behavior and requires a BufferManager instance at initialization to access GPU buffers for state snapshots.
    - `simulation/brush.py` provides GPU brush painting with modes for material, heat, cool, spark, and charge injection.
 
 5. **Presentation**
