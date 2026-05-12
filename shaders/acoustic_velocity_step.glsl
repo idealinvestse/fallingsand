@@ -1,3 +1,5 @@
+#version 430
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Acoustic velocity step (weakly-compressible gas solver)
 //

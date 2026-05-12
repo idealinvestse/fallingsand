@@ -54,6 +54,10 @@ def _load_shader_source(entry: ShaderManifestEntry) -> str:
     if not entry.include_common:
         return shader_code
     common_code = load_shader(d / "common.glsl")
+    # Remove #version directive from shader_code since common.glsl already has it
+    lines = shader_code.split('\n')
+    if lines and lines[0].strip().startswith('#version'):
+        shader_code = '\n'.join(lines[1:])
     return common_code + shader_code
 
 

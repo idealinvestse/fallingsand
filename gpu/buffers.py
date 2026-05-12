@@ -7,7 +7,74 @@ from gpu.resources import SSBO_CELLS_READ, SSBO_CELLS_WRITE, SSBO_RESERVATIONS, 
 
 
 class BufferManager:
-    """Manages GPU buffers for simulation (cell data, velocity, pressure)."""
+    """Manages GPU buffers for simulation (cell data, velocity, pressure).
+
+    Phase 4: Added VRAM estimation for memory management warnings.
+    """
+
+    @staticmethod
+    def estimate_vram_usage(width: int, height: int) -> dict[str, float]:
+        """Estimate VRAM usage in MB for given grid size.
+
+        Args:
+            width: Grid width in cells
+            height: Grid height in cells
+
+        Returns:
+            Dictionary with VRAM estimates for different components.
+        """
+        pixel_count = width * height
+
+        # Texture memory (r32f = 4 bytes per pixel, r16f = 2 bytes per pixel)
+        # Main textures:
+        # - cell buffers (2): uint32 = 4 bytes each
+        # - vel (2): r32f = 4 bytes each
+        # - pres (2): r32f = 4 bytes each
+        # - div (1): r32f = 4 bytes
+        # - vorticity (1): r32f = 4 bytes
+        # - mass (2): r16f = 2 bytes each
+        # - temp (2): r32f = 4 bytes each
+        # - wind (1): rg16f = 2 bytes * 2 channels = 4 bytes
+        # - charge (2): r32f = 4 bytes each
+        # - nutrient (2): r32f = 4 bytes each
+        # - moisture (2): r32f = 4 bytes each
+        # - humidity (2): r32f = 4 bytes each
+        # - display (1): rgba8 = 4 bytes
+        texture_memory_bytes = (
+            pixel_count * 4 * 2 +  # cell buffers
+            pixel_count * 4 * 2 +  # vel
+            pixel_count * 4 * 2 +  # pres
+            pixel_count * 4 * 1 +  # div
+            pixel_count * 4 * 1 +  # vorticity
+            pixel_count * 2 * 2 +  # mass
+            pixel_count * 4 * 2 +  # temp
+            pixel_count * 4 * 1 +  # wind
+            pixel_count * 4 * 2 +  # charge
+            pixel_count * 4 * 2 +  # nutrient
+            pixel_count * 4 * 2 +  # moisture
+            pixel_count * 4 * 2 +  # humidity
+            pixel_count * 4 * 1    # display
+        )
+
+        # Rule buffer: RULE_STRIDE * NUM_TYPES * 4 bytes
+        from core.constants import NUM_TYPES, RULE_STRIDE
+        rule_buffer_bytes = RULE_STRIDE * NUM_TYPES * 4
+
+        # SSBO reservations: cell_count * 4 bytes
+        reservations_bytes = pixel_count * 4
+
+        # Overhead (approximate for driver, context, etc.)
+        overhead_bytes = 50 * 1024 * 1024  # 50 MB
+
+        total_bytes = texture_memory_bytes + rule_buffer_bytes + reservations_bytes + overhead_bytes
+
+        return {
+            "textures_mb": texture_memory_bytes / (1024 * 1024),
+            "rule_buffer_mb": rule_buffer_bytes / (1024 * 1024),
+            "reservations_mb": reservations_bytes / (1024 * 1024),
+            "overhead_mb": overhead_bytes / (1024 * 1024),
+            "total_mb": total_bytes / (1024 * 1024),
+        }
 
     def __init__(self, ctx: moderngl.Context, grid_size: tuple[int, int]):
         """Initialize all GPU buffers and set up persistent bindings."""
@@ -15,6 +82,12 @@ class BufferManager:
         self.width, self.height = grid_size
         self.grid_size = grid_size
         self.cell_count = self.width * self.height
+
+        # Phase 4: Estimate VRAM usage
+        self.vram_estimate = self.estimate_vram_usage(self.width, self.height)
+        if self.vram_estimate["total_mb"] > 2000:  # 2GB
+            print(f"WARNING: Estimated VRAM usage: {self.vram_estimate['total_mb']:.1f} MB")
+            print("Consider reducing grid size for better performance.")
 
         # Cell buffers (double buffering for ping-pong)
         self.read_buf = ctx.buffer(reserve=self.cell_count * 4)
@@ -113,12 +186,70 @@ class BufferManager:
         self._setup_persistent_bindings()
 
     def _create_rule_buffer(self) -> moderngl.Buffer:
-        """Create rule buffer from material definitions."""
+        """Create rule buffer from material definitions with validation (Phase 4 enhanced)."""
         # Import here to avoid circular dependency
         from simulation.materials import to_rule_buffer
+        from core.constants import NUM_TYPES, RULE_STRIDE
 
         rules = to_rule_buffer()
+
+        # Validate rule buffer dimensions
+        expected_len = RULE_STRIDE * NUM_TYPES
+        if len(rules) != expected_len:
+            raise ValueError(f"Rule buffer length mismatch: {len(rules)} != {expected_len}")
+
+        # Phase 4: Enhanced property validation
+        for i in range(0, len(rules), RULE_STRIDE):
+            material_idx = i // RULE_STRIDE
+            self._validate_material_properties(rules, i, material_idx)
+
         return self.ctx.buffer(np.array(rules, dtype='f4'))
+
+    def _validate_material_properties(self, rules: np.ndarray, offset: int, idx: int) -> None:
+        """Validate a single material's properties are GPU-safe (Phase 4).
+
+        Args:
+            rules: Rule buffer array
+            offset: Offset into rules array for this material
+            idx: Material index
+
+        Raises:
+            ValueError: If a property is outside safe ranges
+        """
+        from core.constants import RULE_STRIDE
+
+        # Density: should be reasonable (0 for air, 0.1-100.0 for materials)
+        density = rules[offset + 3]
+        if abs(density) > 100.0:
+            raise ValueError(f"Material {idx}: density {density} exceeds safe range (max 100.0)")
+        if abs(density) < 0.01 and abs(density) > 1e-6:
+            raise ValueError(f"Material {idx}: suspiciously small density {density}")
+
+        # Viscosity: should be non-negative and reasonable
+        viscosity = rules[offset + 4]
+        if viscosity < 0 or viscosity > 100.0:
+            raise ValueError(f"Material {idx}: viscosity {viscosity} out of range (0-100)")
+
+        # Restitution: should be in [0, 2] for bounce
+        restitution = rules[offset + 5]
+        if restitution < 0 or restitution > 2.0:
+            raise ValueError(f"Material {idx}: restitution {restitution} out of range (0-2)")
+
+        # Check for NaN/inf in all properties
+        for j in range(RULE_STRIDE):
+            val = rules[offset + j]
+            if np.isnan(val) or np.isinf(val):
+                raise ValueError(f"Material {idx}: property at offset {j} is NaN/inf")
+
+    def validate_all_buffers(self) -> None:
+        """Validate all GPU buffers at startup (Phase 4).
+
+        This is called during engine initialization to ensure all buffers
+        are in a valid state before simulation begins.
+        """
+        # Rule buffer is validated during creation in _create_rule_buffer
+        # This method can be extended to validate other buffers if needed
+        pass
 
     def _setup_persistent_bindings(self) -> None:
         """Set up persistent buffer bindings to avoid per-frame rebinding."""

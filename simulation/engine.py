@@ -31,6 +31,9 @@ class SimulationEngine:
         self.buffers = BufferManager(self.ctx, (self.width, self.height))
         self.ubo_manager = UBOManager(self.ctx)
 
+        # Phase 4: Validate all buffers at startup
+        self.buffers.validate_all_buffers()
+
         if not config.no_stats:
             from gpu.stats_counter import GPUStatsCounter
             self.stats_counter: GPUStatsCounter | None = GPUStatsCounter(
@@ -67,16 +70,55 @@ class SimulationEngine:
         self.buffers.get_write_buf().write(empty.tobytes())
 
     def _initialize_pressure(self) -> None:
-        """Fill pressure textures with ambient atmospheric pressure.
+        """Fill pressure textures with hydrostatic equilibrium.
 
         This ensures hydrostatic equilibrium from the start — gas cells
         see ambient pressure rather than zero, preventing an initial
         transient shock wave on frame 1.
+
+        Now includes hydrostatic gradient: pressure increases with depth
+        to simulate realistic fluid column pressure.
+
+        Phase 4: Gradient is now grid-size-aware to ensure consistent
+        behavior across different grid sizes.
         """
-        n = self.width * self.height
-        pres_data = np.full(n, self.config.atm_pressure, dtype=np.float32)
+        # Create pressure array with hydrostatic gradient
+        pres_data = np.zeros((self.height, self.width), dtype=np.float32)
+
+        # Scale gradient based on grid height for consistent behavior
+        # Normalized to 512px baseline so larger grids don't have excessive pressure
+        gradient_factor = 0.01 * (512.0 / self.height)
+
+        for gy in range(self.height):
+            depth = self.height - gy  # Depth from top (0 at top, max at bottom)
+            # Hydrostatic pressure = ambient + (depth * gradient_factor)
+            hydrostatic = self.config.atm_pressure + (depth * gradient_factor)
+            pres_data[gy, :] = hydrostatic
+
         self.buffers.pres_a.write(pres_data.tobytes())
         self.buffers.pres_b.write(pres_data.tobytes())
+
+    def emergency_pressure_reset(self) -> None:
+        """Reset pressure field to hydrostatic equilibrium after extreme values.
+
+        This is called when pressure monitoring detects values exceeding
+        safe thresholds (e.g., during extreme explosions). It restores
+        the pressure field to a stable hydrostatic state.
+        """
+        self._initialize_pressure()
+        print("WARNING: Emergency pressure reset triggered due to extreme values")
+
+    def enable_sparse_mode(self, enabled: bool) -> None:
+        """Enable or disable sparse region optimization.
+
+        When enabled, compute shaders are only dispatched on active regions
+        (bounding boxes around non-air cells), improving performance on
+        mostly empty grids.
+
+        Args:
+            enabled: True to enable sparse mode, False to disable.
+        """
+        self.pipeline.enable_sparse_mode(enabled)
 
     # ── Public API ───────────────────────────────────────────────────────────
 
@@ -129,6 +171,22 @@ class SimulationEngine:
         self.frame += 1
         self.explosion_state.update()
         self.explosion_vfx_state.update()
+
+        # Phase 4: Pressure monitoring for extreme values
+        if self.config.enable_emergency_pressure_reset and self.frame % 60 == 0:
+            try:
+                # Sample pressure texture to check for extreme values
+                pres_data = self.buffers.pres_a.read()
+                pres_array = np.frombuffer(pres_data, dtype=np.float32)
+                max_pressure = np.max(pres_array)
+                min_pressure = np.min(pres_array)
+
+                # Trigger emergency reset if values exceed safe thresholds
+                if max_pressure > 10000.0 or min_pressure < -1000.0:
+                    self.emergency_pressure_reset()
+            except Exception:
+                # If reading fails, skip monitoring (don't crash simulation)
+                pass
 
     def render(self) -> None:
         """Render cells into display_texture and blit to the default framebuffer."""

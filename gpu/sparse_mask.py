@@ -1,7 +1,8 @@
 """Sparse region optimization for conditional GPU dispatch."""
 
-import numpy as np
 from typing import List, Tuple
+
+import numpy as np
 
 
 class SparseMask:
@@ -14,7 +15,7 @@ class SparseMask:
         self.active_regions: List[Tuple[int, int, int, int]] = []
         self.sparse_enabled = False
 
-    def update_mask(self, cells: np.ndarray) -> None:
+    def update_mask(self, cells: np.ndarray) -> None:  # type: ignore[type-arg]
         """Update mask based on non-air cells."""
         if not self.sparse_enabled:
             self.active_regions = [(0, 0, self.width, self.height)]

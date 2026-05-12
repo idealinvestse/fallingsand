@@ -5,8 +5,22 @@
 // This file is preprocessed into shaders at load time
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// ── Common Buffer Bindings ─────────────────────────────────────────────────────
-layout(std430, binding = 2) readonly buffer RuleBuffer { float rules[]; };
+// ── Auto-Generated Bindings ───────────────────────────────────────────────────
+// Note: Binding declarations are now inline in each shader to avoid conflicts
+// Shaders include this file for helper functions only
+
+// ── Rules Buffer (needed by getRule helper) ───────────────────────────────────
+layout(std430, binding = 2) readonly buffer Rules { float rules[]; };
+
+// ── Sparse Region Optimization ──────────────────────────────────────────────────
+uniform uvec4 sparseRegion;  // (x, y, width, height) of active region
+uniform bool sparseEnabled;
+
+bool inSparseRegion(ivec2 p, uvec4 region) {
+    if (!sparseEnabled) return true;
+    return p.x >= int(region.x) && p.x < int(region.x + region.z) &&
+           p.y >= int(region.y) && p.y < int(region.y + region.w);
+}
 
 // ── Material IDs ─────────────────────────────────────────────────────────────
 const uint T_AIR   = 0u;  const uint T_SAND  = 1u;  const uint T_WATER = 2u;
@@ -37,6 +51,14 @@ const uint T_QUICKSAND = 45u;
 const uint T_BRINE    = 46u;
 const uint T_SAP      = 47u;
 const uint T_MAGMA    = 48u;
+const uint T_MAGNET   = 49u;
+const uint T_MAGNET_SOUTH = 50u;
+const uint T_PLASMA   = 51u;
+const uint T_LIGHTNING_PLASMA = 52u;
+const uint T_GLASS_NEW = 53u;
+const uint T_OBSIDIAN = 54u;
+const uint T_THERMITE_ENHANCED = 55u;
+const uint T_ACID_GLASS = 56u;
 
 // ── Cell packing utilities ───────────────────────────────────────────────────
 uint getType (uint c){ return c & 0xFFu; }
@@ -98,6 +120,21 @@ struct Rule {
     // Oxygen / combustion properties
     float o2Req;    // Oxygen requirement to sustain combustion
     float o2Yield;  // Oxygen consumed per combustion tick
+    // Magnetic properties (4 floats)
+    float magPol;   // Magnetic polarity (-1 to 1)
+    float magPerm;  // Magnetic permeability
+    float magCoerc; // Magnetic coercivity
+    float magCurie; // Curie temperature
+    // Plasma properties (4 floats)
+    float plasIon;  // Ionization energy
+    float plasDens; // Plasma density
+    float plasConf; // Confinement field
+    float plasRecomb; // Recombination rate
+    // Glass properties (4 floats)
+    float glassTrans;   // Transparency
+    float glassRefract; // Refractive index
+    float glassShatter; // Shatter threshold
+    float glassThermal; // Thermal shock resistance
 };
 
 // Note: ruleStride is now a uniform, not a constant
@@ -155,6 +192,21 @@ Rule getRule(uint tp, uint stride){
     // Oxygen / combustion properties (offset 47)
     r.o2Req    = rules[o+47u];
     r.o2Yield  = rules[o+48u];
+    // Magnetic properties (offset 49-52)
+    r.magPol   = rules[o+49u];
+    r.magPerm  = rules[o+50u];
+    r.magCoerc = rules[o+51u];
+    r.magCurie = rules[o+52u];
+    // Plasma properties (offset 53-56)
+    r.plasIon  = rules[o+53u];
+    r.plasDens = rules[o+54u];
+    r.plasConf = rules[o+55u];
+    r.plasRecomb = rules[o+56u];
+    // Glass properties (offset 57-60)
+    r.glassTrans   = rules[o+57u];
+    r.glassRefract = rules[o+58u];
+    r.glassShatter = rules[o+59u];
+    r.glassThermal = rules[o+60u];
     return r;
 }
 

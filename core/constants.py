@@ -1,10 +1,10 @@
 """Simulation constants."""
 
 # Material type count
-NUM_TYPES = 49
+NUM_TYPES = 61
 
 # Rule buffer stride (floats per material definition)
-# 18 base + 8 new + 15 reactions + 6 explosive + 2 oxygen = 49
+# Actual count from to_rule_buffer: 49 floats per material
 RULE_STRIDE = 49
 
 # Ambient temperature (0-255 scale)

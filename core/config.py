@@ -1,5 +1,7 @@
 """Configuration management for the simulation."""
 
+from typing import Any
+
 import argparse
 from dataclasses import dataclass, field
 
@@ -68,15 +70,45 @@ class SimulationConfig:
     # Dynamic quality scaling (Phase 1)
     adaptive_quality: bool = False
     min_fps_target: float = 30.0
-    quality_tiers: list = field(default_factory=lambda: [
-        {"pressure_iterations": 20, "acoustic_substeps": 6, "bloom_enabled": True},
-        {"pressure_iterations": 12, "acoustic_substeps": 4, "bloom_enabled": True},
-        {"pressure_iterations": 8, "acoustic_substeps": 2, "bloom_enabled": False},
+    quality_tiers: list[dict[str, Any]] = field(default_factory=lambda: [
+        {
+            "name": "high",
+            "pressure_iterations": 20,
+            "acoustic_substeps": 6,
+            "bloom_enabled": True,
+            "bloom_quality": "high",
+            "vorticity_confinement": 0.3,
+            "heat_diffusion_iterations": 2,
+        },
+        {
+            "name": "medium",
+            "pressure_iterations": 12,
+            "acoustic_substeps": 4,
+            "bloom_enabled": True,
+            "bloom_quality": "medium",
+            "vorticity_confinement": 0.2,
+            "heat_diffusion_iterations": 1,
+        },
+        {
+            "name": "low",
+            "pressure_iterations": 8,
+            "acoustic_substeps": 2,
+            "bloom_enabled": False,
+            "bloom_quality": "low",
+            "vorticity_confinement": 0.0,
+            "heat_diffusion_iterations": 0,
+        },
     ])
     transpiration_rate: float = 0.05
 
     # v6.1 Deep System Interactions
     enable_deep_interactions: bool = True  # Master switch for v6.1 features
+
+    # Pressure clamping for stability (Phase 1, enhanced in Phase 4)
+    pressure_clamp_min: float = -500.0
+    pressure_clamp_max: float = 5000.0
+    enable_pressure_validation: bool = True
+    enable_emergency_pressure_reset: bool = True  # Phase 4: Auto-reset on extreme values
 
     # Electricity + Fluid interaction parameters
     electricity_moisture_boost: float = 2.0       # Conductivity multiplier per moisture unit
@@ -190,5 +222,33 @@ class SimulationConfig:
             errors.append(
                 f"pressure_iterations must be between {MIN_PRESSURE_ITERATIONS} and {MAX_PRESSURE_ITERATIONS}"
             )
+
+        # Phase 4: VRAM estimation and warnings
+        from gpu.buffers import BufferManager
+        vram = BufferManager.estimate_vram_usage(self.width, self.height)
+
+        # Try to get actual GPU memory (platform-dependent)
+        try:
+            import moderngl
+            # Create a temporary context to query GPU memory
+            test_ctx = moderngl.create_context(standalone=True)
+            info = test_ctx.info
+            total_gpu_memory = info.get('GL_GPU_MEMORY_INFO_TOTAL_AVAILABLE_MEMORY_NVX', 0)
+            if total_gpu_memory > 0:
+                usage_percent = (vram['total_mb'] / total_gpu_memory) * 100
+                if usage_percent > 70:
+                    errors.append(
+                        f"Estimated VRAM usage ({vram['total_mb']:.1f} MB) exceeds 70% of "
+                        f"available GPU memory ({total_gpu_memory} MB). "
+                        f"Consider reducing grid size."
+                    )
+            test_ctx.release()
+        except Exception:
+            # If we can't query GPU memory, just warn on high usage
+            if vram['total_mb'] > 1000:  # 1GB
+                errors.append(
+                    f"Estimated VRAM usage ({vram['total_mb']:.1f} MB) is high. "
+                    f"Consider reducing grid size for better performance."
+                )
 
         return errors

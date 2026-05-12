@@ -1,3 +1,5 @@
+#version 430
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Electricity propagation shader (Phase 1)
 //
@@ -62,6 +64,11 @@ void main(){
         float moistureBoost = 1.0 + moisture * electricity_moisture_boost;
         float effectiveCond = r.cond * moistureBoost;
 
+        // v7.0: Plasma has maximum conductivity and faster propagation
+        if(r.sf == 3){  // plasma state family
+            effectiveCond = 1.0;  // Override to maximum
+        }
+
         ivec2 pL = p + ivec2(-1, 0);
         ivec2 pR = p + ivec2( 1, 0);
         ivec2 pD = p + ivec2( 0,-1);
@@ -89,7 +96,11 @@ void main(){
         flux = wL*(qL - q) + wR*(qR - q) + wD*(qD - q) + wU*(qU - q);
 
         // v6.1: Higher propagation speed when moisture is present (wet conductor effect)
+        // v7.0: Plasma has faster propagation rate
         float rate = 4.0 * (1.0 + moisture * 0.5);
+        if(r.sf == 3){  // plasma state family
+            rate = 8.0;  // Faster propagation in plasma
+        }
         qNew = q + clamp(flux * rate * dt, -maxCharge, maxCharge);
     }
 

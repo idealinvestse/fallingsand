@@ -2,6 +2,150 @@
 
 Consolidated implementation history for the Falling Sand simulation.
 
+## v7.0 Evolution (2026-XX)
+
+### Phase 4 — Final Polish, Testing & Release Preparation
+
+#### Critical Bug Fixes & Stability Polish
+
+- **Pressure solver stabilization**:
+  - Enhanced clamping bounds: increased from -100.0/1000.0 to -500.0/5000.0 in pressure_shader.glsl
+  - Emergency reset detection: PRESSURE_EMERGENCY_RESET = 10000.0 with fallback to previous pressure
+  - Emergency reset method: `emergency_pressure_reset()` in simulation/engine.py
+  - Pressure monitoring: periodic sampling every 60 frames with auto-reset on extreme values
+  - Grid-size-aware hydrostatic gradient: scales with grid height (normalized to 512px baseline)
+
+- **OpenGL context loss handling**:
+  - Context validity check: `check_context_valid()` in gpu/context.py
+  - Context recreation: `recreate_context()` method with shader reloading
+  - Window resize handling: VIDEORESIZE event support with UI overlay updates
+  - Context error recovery: try/except in main loop for simulation step and render
+
+- **Memory management for large grids**:
+  - VRAM estimation: `estimate_vram_usage()` static method in gpu/buffers.py
+  - VRAM warnings: launcher, CLI, and config validation warnings for grids > 1024×1024
+  - Config validation: GPU memory query with 70% threshold warning
+  - Launcher VRAM display: status label shows VRAM usage for large resolutions
+
+- **Material property validation**:
+  - GPU-safe range checks: density (0-50), viscosity (0-100), restitution (0-2)
+  - NaN/inf detection: validates all material properties at startup
+  - Enhanced validation: `_validate_material_properties()` in gpu/buffers.py
+  - Startup validation: `validate_all_buffers()` called in simulation/engine.py
+
+#### Comprehensive Testing
+
+- **Cross-system interaction tests**: tests/test_cross_system_interactions.py
+  - Electricity ↔ Biology coupling validation
+  - Biology ↔ Weather coupling validation
+  - Weather ↔ Electricity coupling validation
+  - Fluid ↔ Electricity coupling validation
+  - Cross-system edge cases and parameter validation
+
+- **Edge-case tests**: tests/test_edge_cases.py
+  - Empty grid stability
+  - Boundary conditions (min/max grid sizes)
+  - Extreme parameter values (pressure iterations, substeps, window sizes)
+  - System toggle stability (all on/off)
+  - Parameter range validation (charge, biology, weather, bloom)
+
+- **Save/load migration tests**: tests/test_save_load_migration.py
+  - Save format option validation (v7/v8)
+  - Field preservation verification
+  - CRC32 validation documentation
+  - Migration path validation
+  - Persistence infrastructure checks
+
+- **Manual checklist automation**: tests/test_manual_checklist_automation.py
+  - CLI flag parsing for all 20+ parameters
+  - System controls configuration validation
+  - Performance overlay configuration validation
+  - Cross-system coupling parameter validation
+  - Save/load configuration validation
+
+- **Pressure stability tests**: Enhanced tests/test_pressure_stability.py
+  - Enhanced clamping bounds validation
+  - Emergency reset threshold validation
+  - Config flag validation
+  - Hydrostatic gradient scaling validation
+
+#### Release Preparation
+
+- **PyInstaller build script**: Enhanced tools/build_exe.py
+  - `--debug` flag: builds with console output for debugging
+  - `--onefile` flag: builds as single file (slower startup)
+  - Auto-copy README to dist/
+  - Auto-create VERSION.txt in dist/
+  - Improved spec file: better hiddenimports, excludes, data files
+
+### Phase 3 — New Features, Content & Polish
+
+#### Extended Material System
+- **New property groups**: Added MagneticProps, PlasmaProps, and GlassProps to v6 material schema (simulation/material_schema.py)
+- **8 new materials**:
+  - Magnetic: magnet (north polarity), magnet_south (south polarity)
+  - Plasma: plasma (high-temperature ionized gas), lightning_plasma (ultra-hot arc plasma)
+  - Glass: glass (transparent, shatters), obsidian (volcanic glass, very hard)
+  - Enhanced: thermite_enhanced (magnetic ignition), acid_glass_corrosive (glass corrosion)
+- **GPU rule buffer**: Increased RULE_STRIDE from 49 to 61 to accommodate 12 new material property fields
+- **Shader interactions**: Implemented magnetic attraction/repulsion, plasma recombination and ignition, glass shattering from impact and thermal shock
+- **Plasma conductivity**: Enhanced electricity_step.glsl with maximum conductivity and faster propagation for plasma materials
+
+#### Advanced Explosions & Chain Reactions
+- **Enhanced chain reaction logic**: Material-specific sensitivity modifiers (C4: 0.95, gunpowder: 0.4, dynamite: 0.7, thermite: 0.6, napalm: 0.8)
+- **Distance attenuation**: Chain reaction probability decreases with distance from blast source
+- **Electrical ignition**: Conductive explosives (cond > 0.3) detonate from electrical sparks
+- **Magnetic ignition**: Thermite materials can be ignited by nearby magnetic materials when heated
+- **Hotkey exposure**:
+  - X: Standard explosion
+  - Shift+X: Big explosion
+  - Ctrl+X: Thermobaric explosion
+  - Alt+X: Deflagration explosion
+
+#### Documentation Updates
+- **PERFORMANCE.md**: Enhanced with new material performance impact notes
+- **ELECTRICITY.md**: Updated with v6.1 cross-system interactions (moisture-based conductivity boost, electrolysis charge transport, plasma conductivity)
+- **BIOLOGY.md**: Enhanced with new material biological properties and ecosystem interaction examples
+- **WEATHER.md**: Updated with plasma atmospheric effects and weather interaction examples
+- **CHANGELOG.md**: Comprehensive v6.0→v7.0 changes documented
+
+## v6.1 Phase 1 Implementation (2026-05)
+
+### Critical Stability Fixes
+
+- **Pressure clamping**: Added PRESSURE_MIN (-100.0) and PRESSURE_MAX (1000.0) constants in pressure_shader.glsl with NaN/inf detection to prevent simulation explosions
+- **Hydrostatic pressure initialization**: Implemented realistic pressure gradient in simulation/engine.py `_initialize_pressure()` using depth-based calculation (density × gravity × depth)
+- **Material property validation**: Added validation in gpu/buffers.py `_create_rule_buffer()` to check rule buffer dimensions and density ranges at load time
+- **Pressure clamping config**: Added `pressure_clamp_min`, `pressure_clamp_max`, and `enable_pressure_validation` options to core/config.py
+- **Unit tests**: Created tests/test_pressure_stability.py with comprehensive tests for pressure clamping, hydrostatic initialization, and material validation
+
+### Sparse Region Optimization (Complete)
+
+- **Dispatch integration**: Fully integrated sparse dispatch ranges into gpu/pipeline.py `_step_multi_pass()` for all compute passes (state, liquid, heat, vorticity, velocity_advect, force, divergence, pressure, project, electricity, biology, weather, acoustic, advect)
+- **Shader uniforms**: Added `sparseRegion` (uvec4) and `sparseEnabled` (bool) uniforms to shaders/common.glsl with `inSparseRegion()` helper function
+- **Early-out support**: Added sparse region early-out check to state_shader.glsl
+- **Public API**: Exposed `enable_sparse_mode(enabled: bool)` in simulation/engine.py for user control
+- **Performance**: Expected 35-50% FPS improvement on mostly empty grids
+
+### Adaptive Quality System (Complete)
+
+- **Hysteresis logic**: Enhanced `update_quality_tier()` with 120-frame cooldown (2 seconds at 60fps) to prevent rapid tier switching
+- **Tier logging**: Added console logging for tier changes with FPS context for debugging
+- **Expanded tiers**: Enhanced quality tiers in core/config.py to include `bloom_quality`, `vorticity_confinement`, and `heat_diffusion_iterations` parameters
+- **Full tier application**: Updated `_apply_quality_tier()` to apply all tier settings including new parameters
+- **Pass priority mapping**: Expanded `_should_skip_pass()` with full priority mapping covering biology, weather, electricity, arc, acoustic, vorticity, and heat passes
+
+### Performance Overlay (Complete)
+
+- **VRAM estimation**: Added accurate VRAM estimation based on grid size and texture memory in ui/performance_overlay.py
+- **FPS graph fix**: Fixed budget line to use target FPS (55.0) instead of current FPS
+- **Status indicators**: Added sparse mode status, adaptive quality status, and quality tier display to performance overlay
+
+### Documentation Updates
+
+- **PERFORMANCE.md**: Updated with Phase 1 enhancements for quality tier system, sparse region optimization, and adaptive pass skipping
+- **CHANGELOG.md**: Added comprehensive Phase 1 implementation notes
+
 ## v6.0 Final Polish (2026-05)
 
 ### Phase 4 — UI & CLI Enhancements

@@ -5,6 +5,7 @@ schema_version: 6
 materials:
   0:
     name: air
+    description: "Empty space. Gases can pass through freely."
     display:
       color: [0, 0, 0]
       emissive: 0.0
@@ -48,6 +49,7 @@ materials:
 
   2:
     name: water
+    description: "Universal solvent. Flows and fills containers. Freezes to ice, boils to steam."
     display:
       color: [80, 140, 255]
       emissive: 0.02
@@ -106,6 +108,7 @@ materials:
 
   4:
     name: oil
+    description: "Flammable liquid. Burns with high heat. Floats on water."
     display:
       color: [100, 80, 40]
       emissive: 0.05
@@ -155,6 +158,7 @@ materials:
 
   6:
     name: lava
+    description: "Molten rock. Extremely hot. Melts most materials and ignites flammable ones."
     display:
       color: [255, 50, 0]
       emissive: 0.8
@@ -203,6 +207,7 @@ materials:
 
   8:
     name: steam
+    description: "Gaseous water. Rises and condenses back to water when cooled."
     display:
       color: [200, 200, 220]
       emissive: 0.1
@@ -252,6 +257,7 @@ materials:
   # Electrical materials (Phase 2 cross-system coupling)
   10:
     name: copper
+    description: "Conductive metal. Good for electrical circuits. Conducts heat well."
     display:
       color: [184, 115, 51]
       emissive: 0.0
@@ -299,8 +305,9 @@ materials:
       shockwave_speed: 0.0
 
   # Biology materials (Phase 2 cross-system coupling)
-  12:
+  14:
     name: plant
+    description: "Living material. Grows with water and light. Can be burned or eaten."
     display:
       color: [34, 139, 34]
       emissive: 0.0
@@ -347,3 +354,449 @@ materials:
       blast_radius: 0
       blast_duration: 0
       shockwave_speed: 0.0
+
+  # Magnetic materials
+  15:
+    name: magnet
+    description: "Ferromagnetic material that attracts/repels other magnets based on polarity."
+    display:
+      color: [100, 100, 120]
+      emissive: 0.0
+    physical:
+      category: solid
+      state_family: solid
+      density: 7.8
+      viscosity: 0.0
+      cohesion: 0.9
+      restitution: 0.05
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.15
+      heat_capacity: 0.45
+      cooling_rate: 0.01
+      melting_point: 1538.0
+      boiling_point: 2862.0
+      phase_high:
+        material: lava
+        temp: 1538.0
+    electrical:
+      conductivity: 0.1
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+    magnetic:
+      polarity: 1.0
+      permeability: 0.95
+      coercivity: 0.8
+      curie_temp: 770.0
+
+  16:
+    name: magnet_south
+    description: "Ferromagnetic material with south polarity (attracts north, repels south)."
+    display:
+      color: [120, 100, 100]
+      emissive: 0.0
+    physical:
+      category: solid
+      state_family: solid
+      density: 7.8
+      viscosity: 0.0
+      cohesion: 0.9
+      restitution: 0.05
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.15
+      heat_capacity: 0.45
+      cooling_rate: 0.01
+      melting_point: 1538.0
+      boiling_point: 2862.0
+      phase_high:
+        material: lava
+        temp: 1538.0
+    electrical:
+      conductivity: 0.1
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+    magnetic:
+      polarity: -1.0
+      permeability: 0.95
+      coercivity: 0.8
+      curie_temp: 770.0
+
+  # Plasma materials
+  17:
+    name: plasma
+    description: "High-temperature ionized gas with extreme conductivity and emissive glow."
+    display:
+      color: [180, 100, 255]
+      emissive: 1.0
+    physical:
+      category: gas
+      state_family: plasma
+      density: -0.3
+      viscosity: 0.0
+      cohesion: 0.0
+      restitution: 0.0
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.3
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.95
+      heat_capacity: 0.3
+      cooling_rate: 0.005
+      melting_point: 0.0
+      boiling_point: 0.0
+      phase_low:
+        material: fire
+        temp: 200.0
+      default_flame_temp: 300.0
+      default_flame_life: 8
+    electrical:
+      conductivity: 1.0
+      capacitance: 0.05
+      breakdown_voltage: 1000.0
+      arc_emission: 1.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+    plasma:
+      ionization_energy: 13.6
+      plasma_density: 0.8
+      confinement_field: 0.0
+      recombination_rate: 0.1
+
+  18:
+    name: lightning_plasma
+    description: "Ultra-hot plasma created by electrical arcs, extremely volatile."
+    display:
+      color: [200, 200, 255]
+      emissive: 1.0
+    physical:
+      category: gas
+      state_family: plasma
+      density: -0.5
+      viscosity: 0.0
+      cohesion: 0.0
+      restitution: 0.0
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.5
+      wet_dry: 0.0
+    thermal:
+      conductivity: 1.0
+      heat_capacity: 0.2
+      cooling_rate: 0.02
+      melting_point: 0.0
+      boiling_point: 0.0
+      phase_low:
+        material: plasma
+        temp: 250.0
+      default_flame_temp: 400.0
+      default_flame_life: 4
+    electrical:
+      conductivity: 1.0
+      capacitance: 0.1
+      breakdown_voltage: 2000.0
+      arc_emission: 1.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+    plasma:
+      ionization_energy: 24.6
+      plasma_density: 0.5
+      confinement_field: 0.0
+      recombination_rate: 0.3
+
+  # Glass materials
+  19:
+    name: glass
+    description: "Transparent solid that shatters under impact or thermal shock."
+    display:
+      color: [200, 220, 255]
+      emissive: 0.0
+    physical:
+      category: solid
+      state_family: solid
+      density: 2.5
+      viscosity: 0.0
+      cohesion: 0.4
+      restitution: 0.1
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.01
+      heat_capacity: 0.84
+      cooling_rate: 0.01
+      melting_point: 1400.0
+      boiling_point: 2230.0
+      phase_high:
+        material: lava
+        temp: 1400.0
+    electrical:
+      conductivity: 0.0
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+    glass:
+      transparency: 0.8
+      refractive_index: 1.5
+      shatter_threshold: 5.0
+      thermal_shock_resistance: 0.3
+
+  20:
+    name: obsidian
+    description: "Volcanic glass formed from rapidly cooled lava, very hard and sharp."
+    display:
+      color: [30, 30, 40]
+      emissive: 0.0
+    physical:
+      category: solid
+      state_family: solid
+      density: 2.6
+      viscosity: 0.0
+      cohesion: 0.95
+      restitution: 0.02
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.02
+      heat_capacity: 0.75
+      cooling_rate: 0.008
+      melting_point: 950.0
+      boiling_point: 1600.0
+      phase_high:
+        material: lava
+        temp: 950.0
+    electrical:
+      conductivity: 0.0
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+    glass:
+      transparency: 0.0
+      refractive_index: 1.6
+      shatter_threshold: 15.0
+      thermal_shock_resistance: 0.1
+
+  # Enhanced materials with new properties
+  21:
+    name: thermite_enhanced
+    description: "Enhanced thermite that can be ignited by magnetic fields and produces plasma."
+    display:
+      color: [200, 150, 50]
+      emissive: 0.9
+    physical:
+      category: solid
+      state_family: solid
+      density: 4.5
+      viscosity: 0.0
+      cohesion: 0.7
+      restitution: 0.02
+      surface_tension: 0.0
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.8
+      heat_capacity: 0.9
+      cooling_rate: 0.002
+      melting_point: 1200.0
+      boiling_point: 2500.0
+      phase_high:
+        material: lava
+        temp: 1200.0
+      default_flame_temp: 350.0
+      default_flame_life: 10
+    electrical:
+      conductivity: 0.3
+      capacitance: 0.0
+      breakdown_voltage: 50.0
+      arc_emission: 0.5
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 8.0
+      detonation_temp: 220.0
+      blast_radius: 15
+      blast_duration: 5
+      shockwave_speed: 0.5
+    magnetic:
+      polarity: 0.0
+      permeability: 0.3
+      coercivity: 0.2
+      curie_temp: 0.0
+    plasma:
+      ionization_energy: 0.0
+      plasma_density: 0.0
+      confinement_field: 0.0
+      recombination_rate: 0.0
+    glass:
+      transparency: 0.0
+      refractive_index: 1.0
+      shatter_threshold: 0.0
+      thermal_shock_resistance: 0.0
+
+  22:
+    name: acid_glass_corrosive
+    description: "Enhanced acid that rapidly corrodes glass materials."
+    display:
+      color: [100, 200, 100]
+      emissive: 0.3
+    physical:
+      category: liquid
+      state_family: liquid
+      density: 1.8
+      viscosity: 0.3
+      cohesion: 0.2
+      restitution: 0.05
+      surface_tension: 0.2
+      solubility: 0.0
+      turbulence: 0.0
+      wet_dry: 0.0
+    thermal:
+      conductivity: 0.3
+      heat_capacity: 0.9
+      cooling_rate: 0.01
+      melting_point: 0.0
+      boiling_point: 120.0
+      phase_high:
+        material: steam
+        temp: 110.0
+    electrical:
+      conductivity: 0.4
+      capacitance: 0.0
+      breakdown_voltage: 0.0
+      arc_emission: 0.0
+    chemistry:
+      flammability: 0.0
+      oxygen_requirement: 0.0
+      oxygen_yield: 0.0
+    biology:
+      biomass: 0.0
+      growth_rate: 0.0
+      decay_rate: 0.0
+      nutrient_value: 0.0
+    explosion:
+      power: 0.0
+      detonation_temp: 255.0
+      blast_radius: 0
+      blast_duration: 0
+      shockwave_speed: 0.0
+    magnetic:
+      polarity: 0.0
+      permeability: 0.0
+      coercivity: 0.0
+      curie_temp: 0.0
+    plasma:
+      ionization_energy: 0.0
+      plasma_density: 0.0
+      confinement_field: 0.0
+      recombination_rate: 0.0
+    glass:
+      transparency: 0.0
+      refractive_index: 1.0
+      shatter_threshold: 0.0
+      thermal_shock_resistance: 0.0

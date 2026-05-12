@@ -44,6 +44,9 @@ class FallingSandLauncher:
         self.preset_var = _make_var(tk.StringVar, self.root, "med")
         self.level_var = _make_var(tk.StringVar, self.root, "sandbox")
 
+        # Phase 4: Track resolution changes for VRAM warning
+        self.resolution_var.trace_add("write", self._on_resolution_change)
+
         self.enable_turbulence = _make_var(tk.BooleanVar, self.root, True)
         self.enable_wet_dry = _make_var(tk.BooleanVar, self.root, True)
         self.enable_thermal = _make_var(tk.BooleanVar, self.root, True)
@@ -189,6 +192,22 @@ class FallingSandLauncher:
         ttk.Button(presets, text="Low", command=lambda: self._apply_profile("low")).pack(side=tk.LEFT)
         ttk.Button(presets, text="Medium", command=lambda: self._apply_profile("med")).pack(side=tk.LEFT, padx=8)
         ttk.Button(presets, text="High", command=lambda: self._apply_profile("high")).pack(side=tk.LEFT)
+
+    def _on_resolution_change(self, *args) -> None:
+        """Phase 4: Show VRAM warning when large resolution is selected."""
+        try:
+            res = self.resolution_var.get()
+            width, height = map(int, res.split('x'))
+            from gpu.buffers import BufferManager
+            vram = BufferManager.estimate_vram_usage(width, height)
+            if vram['total_mb'] > 500:  # 500MB threshold for launcher warning
+                if self.status_label:
+                    self.status_label.config(
+                        text=f"VRAM: {vram['total_mb']:.0f} MB (large grid)",
+                        foreground="#FFB86C"
+                    )
+        except Exception:
+            pass
 
     def _build_about_tab(self) -> None:
         text = (

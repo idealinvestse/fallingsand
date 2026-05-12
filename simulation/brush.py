@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from gpu.buffers import BufferManager
 from gpu.resources import (
     IMAGE_CHARGE_IN,
@@ -33,8 +35,8 @@ class BrushPainter:
         radius: int,
         material_id: int,
         mode: int = 0,
-        delta: int = 0,
-        **kwargs,
+        delta: float = 0,
+        **kwargs: Any,
     ) -> None:
         """Paint cells onto the grid.
 

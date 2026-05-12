@@ -98,9 +98,34 @@ class ExplosionProps:
 
 
 @dataclass(slots=True)
+class MagneticProps:
+    polarity: float = 0.0  # -1.0 (south) to 1.0 (north)
+    permeability: float = 0.0  # 0=non-magnetic, 1=ferromagnetic
+    coercivity: float = 0.0  # Resistance to demagnetization
+    curie_temp: float = 0.0  # Temperature at which magnetism is lost
+
+
+@dataclass(slots=True)
+class PlasmaProps:
+    ionization_energy: float = 0.0  # Energy required to ionize
+    plasma_density: float = 0.0  # Particle density in plasma state
+    confinement_field: float = 0.0  # Magnetic confinement strength
+    recombination_rate: float = 0.0  # Rate of returning to neutral state
+
+
+@dataclass(slots=True)
+class GlassProps:
+    transparency: float = 0.0  # 0=opaque, 1=fully transparent
+    refractive_index: float = 1.0  # Light bending (1.0=air, 1.5=glass)
+    shatter_threshold: float = 0.0  # Impact force to shatter
+    thermal_shock_resistance: float = 0.0  # Resistance to rapid temp changes
+
+
+@dataclass(slots=True)
 class MaterialDefV6:
     id: int
     name: str
+    description: str = ""
     display: DisplayProps = field(default_factory=DisplayProps)
     physical: PhysicalProps = field(default_factory=PhysicalProps)
     thermal: ThermalProps = field(default_factory=ThermalProps)
@@ -108,6 +133,9 @@ class MaterialDefV6:
     chemistry: ChemistryProps = field(default_factory=ChemistryProps)
     biology: BiologyProps = field(default_factory=BiologyProps)
     explosion: ExplosionProps = field(default_factory=ExplosionProps)
+    magnetic: MagneticProps = field(default_factory=MagneticProps)
+    plasma: PlasmaProps = field(default_factory=PlasmaProps)
+    glass: GlassProps = field(default_factory=GlassProps)
 
 
 # ── Category / StateFamily string-to-int mapping ──────────────────────────────
@@ -134,27 +162,27 @@ def _parse_color(raw: Any) -> tuple[int, int, int]:
     return (255, 255, 255)
 
 
-def _get_str(d: dict, key: str, default: str = "") -> str:
+def _get_str(d: dict[str, Any], key: str, default: str = "") -> str:
     v = d.get(key, default)
     return str(v) if v is not None else default
 
 
-def _get_float(d: dict, key: str, default: float = 0.0) -> float:
+def _get_float(d: dict[str, Any], key: str, default: float = 0.0) -> float:
     v = d.get(key, default)
     return float(v) if v is not None else default
 
 
-def _get_int(d: dict, key: str, default: int = 0) -> int:
+def _get_int(d: dict[str, Any], key: str, default: int = 0) -> int:
     v = d.get(key, default)
     return int(v) if v is not None else default
 
 
-def _get_bool(d: dict, key: str, default: bool = False) -> bool:
+def _get_bool(d: dict[str, Any], key: str, default: bool = False) -> bool:
     v = d.get(key, default)
     return bool(v) if v is not None else default
 
 
-def _parse_reactions(raw: list[dict]) -> list[ReactionDef]:
+def _parse_reactions(raw: list[dict[str, Any]]) -> list[ReactionDef]:
     result: list[ReactionDef] = []
     for r in raw[:3]:  # max 3 reaction slots for legacy compat
         result.append(ReactionDef(
@@ -186,6 +214,7 @@ def load_materials_v6(path: str | Path) -> dict[int, MaterialDefV6]:
     for mat_id_str, m in raw_materials.items():
         mat_id = int(mat_id_str)
         name = _get_str(m, "name", f"material_{mat_id}")
+        description = _get_str(m, "description", "")
         name_to_id[name] = mat_id
 
         display_raw = m.get("display", {})
@@ -259,9 +288,34 @@ def load_materials_v6(path: str | Path) -> dict[int, MaterialDefV6]:
             shockwave_speed=_get_float(expl_raw, "shockwave_speed"),
         )
 
+        mag_raw = m.get("magnetic", {})
+        magnetic = MagneticProps(
+            polarity=_get_float(mag_raw, "polarity"),
+            permeability=_get_float(mag_raw, "permeability"),
+            coercivity=_get_float(mag_raw, "coercivity"),
+            curie_temp=_get_float(mag_raw, "curie_temp"),
+        )
+
+        plasma_raw = m.get("plasma", {})
+        plasma = PlasmaProps(
+            ionization_energy=_get_float(plasma_raw, "ionization_energy"),
+            plasma_density=_get_float(plasma_raw, "plasma_density"),
+            confinement_field=_get_float(plasma_raw, "confinement_field"),
+            recombination_rate=_get_float(plasma_raw, "recombination_rate"),
+        )
+
+        glass_raw = m.get("glass", {})
+        glass = GlassProps(
+            transparency=_get_float(glass_raw, "transparency"),
+            refractive_index=_get_float(glass_raw, "refractive_index", 1.0),
+            shatter_threshold=_get_float(glass_raw, "shatter_threshold"),
+            thermal_shock_resistance=_get_float(glass_raw, "thermal_shock_resistance"),
+        )
+
         materials[mat_id] = MaterialDefV6(
             id=mat_id,
             name=name,
+            description=description,
             display=display,
             physical=physical,
             thermal=thermal,
@@ -269,6 +323,9 @@ def load_materials_v6(path: str | Path) -> dict[int, MaterialDefV6]:
             chemistry=chemistry,
             biology=biology,
             explosion=explosion,
+            magnetic=magnetic,
+            plasma=plasma,
+            glass=glass,
         )
 
     # Resolve name-based references to IDs
@@ -305,12 +362,12 @@ def _resolve_references(materials: dict[int, MaterialDefV6], name_to_id: dict[st
 
 # ── Legacy adapter: v6 -> v5 flat dict ────────────────────────────────────────
 
-def to_legacy_defs(v6_materials: dict[int, MaterialDefV6]) -> dict[int, dict]:
+def to_legacy_defs(v6_materials: dict[int, MaterialDefV6]) -> dict[int, dict[str, Any]]:
     """Convert v6 MaterialDefV6 objects to legacy flat dict format.
 
     Produces dicts compatible with the current MaterialRegistry._initialize_materials().
     """
-    result: dict[int, dict] = {}
+    result: dict[int, dict[str, Any]] = {}
     for mat_id, m in v6_materials.items():
         d = m.display
         p = m.physical
@@ -318,6 +375,9 @@ def to_legacy_defs(v6_materials: dict[int, MaterialDefV6]) -> dict[int, dict]:
         e = m.electrical
         c = m.chemistry
         ex = m.explosion
+        mag = m.magnetic
+        plas = m.plasma
+        gl = m.glass
 
         # Resolve phase IDs (could be int from resolve or str name)
         phi_h = t.phase_high_material if isinstance(t.phase_high_material, int) else 0
@@ -396,6 +456,18 @@ def to_legacy_defs(v6_materials: dict[int, MaterialDefV6]) -> dict[int, dict]:
             "sw_spd": ex.shockwave_speed,
             "o2_req": c.oxygen_requirement,
             "o2_yield": c.oxygen_yield,
+            "mag_pol": mag.polarity,
+            "mag_perm": mag.permeability,
+            "mag_coerc": mag.coercivity,
+            "mag_curie": mag.curie_temp,
+            "plas_ion": plas.ionization_energy,
+            "plas_dens": plas.plasma_density,
+            "plas_conf": plas.confinement_field,
+            "plas_recomb": plas.recombination_rate,
+            "glass_trans": gl.transparency,
+            "glass_refract": gl.refractive_index,
+            "glass_shatter": gl.shatter_threshold,
+            "glass_thermal": gl.thermal_shock_resistance,
         }
     return result
 
@@ -424,5 +496,26 @@ def validate_v6_materials(materials: dict[int, MaterialDefV6]) -> list[str]:
 
         if p.density <= 0 and p.category != "gas":
             warnings.append(f"[{m.name}] density {p.density} <= 0 (non-gas)")
+
+        # Validate magnetic properties
+        mag = m.magnetic
+        if not (-1.0 <= mag.polarity <= 1.0):
+            warnings.append(f"[{m.name}] polarity {mag.polarity} out of range [-1,1]")
+        if not (0.0 <= mag.permeability <= 1.0):
+            warnings.append(f"[{m.name}] permeability {mag.permeability} out of range [0,1]")
+
+        # Validate plasma properties
+        plas = m.plasma
+        if plas.ionization_energy < 0.0:
+            warnings.append(f"[{m.name}] ionization_energy must be >= 0")
+        if plas.plasma_density < 0.0:
+            warnings.append(f"[{m.name}] plasma_density must be >= 0")
+
+        # Validate glass properties
+        gl = m.glass
+        if not (0.0 <= gl.transparency <= 1.0):
+            warnings.append(f"[{m.name}] transparency {gl.transparency} out of range [0,1]")
+        if not (1.0 <= gl.refractive_index <= 3.0):
+            warnings.append(f"[{m.name}] refractive_index {gl.refractive_index} out of reasonable range [1,3]")
 
     return warnings

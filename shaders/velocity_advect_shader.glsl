@@ -1,3 +1,5 @@
+#version 430
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Semi-Lagrangian BFECC advection for velocity and temperature (Phase 4)
 //

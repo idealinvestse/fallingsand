@@ -45,12 +45,13 @@ from pygame.locals import (
     MOUSEBUTTONUP,
     MOUSEWHEEL,
     QUIT,
+    VIDEORESIZE,
 )
 from pathlib import Path
 
 from core.config import SimulationConfig
-from core.constants import NUM_TYPES
 from gpu.context import ContextManager
+from gpu.shader_registry import load_all_shaders
 from levels import get_custom_store, get_level_by_id
 from simulation.engine import SimulationEngine
 from hud import HUD
@@ -172,6 +173,14 @@ def main() -> None:
             print(f"Error: {error}")
         sys.exit(1)
 
+    # Phase 4: Additional VRAM warning for large grids
+    from gpu.buffers import BufferManager
+    vram = BufferManager.estimate_vram_usage(config.width, config.height)
+    if vram['total_mb'] > 1000:
+        print(f"WARNING: Large grid size {config.width}×{config.height}")
+        print(f"Estimated VRAM usage: {vram['total_mb']:.1f} MB")
+        print("Consider using --preset low or reducing grid size if performance is poor")
+
     # Initialize GPU context
     ctx_manager = ContextManager((config.window_width, config.window_height))
 
@@ -184,9 +193,11 @@ def main() -> None:
 
     # Initialize HUD
     hud = None
+    num_materials = 0
     if not config.no_hud:
         from simulation.materials import get_all_materials
         materials = get_all_materials()
+        num_materials = len(materials)
         hud = HUD(ctx_manager.get_context(), (config.window_width, config.window_height), materials)
         hud.update(1, 12, 0)
 
@@ -221,7 +232,6 @@ def main() -> None:
         if selected is None:
             print(f"Unknown level '{args.level}'.")
         else:
-            engine.push_undo_snapshot()
             engine.load_level(selected)
 
     def _take_screenshot() -> None:
@@ -328,6 +338,22 @@ def main() -> None:
                 intro_visible = False
             if ev.type == QUIT:
                 running = False
+            elif ev.type == VIDEORESIZE:
+                # Phase 4: Handle window resize
+                new_width, new_height = ev.w, ev.h
+                print(f"Window resized to {new_width}x{new_height}")
+                config.window_width = new_width
+                config.window_height = new_height
+                ctx_manager.resize_window((new_width, new_height))
+                # Update UI overlays
+                pause_menu.resize((new_width, new_height))
+                keybind_overlay.resize((new_width, new_height))
+                inspector.resize((new_width, new_height))
+                intro_overlay.resize((new_width, new_height))
+                system_controls.resize((new_width, new_height))
+                performance_overlay.resize((new_width, new_height))
+                if hud:
+                    hud.resize((new_width, new_height))
             elif ev.type == MOUSEBUTTONDOWN and paused and ev.button == 1:
                 action_payload = pause_menu.handle_click(*ev.pos)
                 if action_payload is not None:
@@ -338,7 +364,7 @@ def main() -> None:
             elif ev.type == MOUSEWHEEL:
                 if paused:
                     continue
-                current_brush = (current_brush + ev.y) % NUM_TYPES
+                current_brush = (current_brush + ev.y) % num_materials if num_materials > 0 else 0
                 if hud:
                     hud.update(current_brush, brush_size, brush_mode)
             elif ev.type == KEYDOWN:
@@ -399,14 +425,19 @@ def main() -> None:
                     engine.push_undo_snapshot()
                     engine.clear_grid()
                 elif ev.key == K_x:
-                    # Trigger explosion at mouse position
+                    # Trigger explosion at mouse position with type based on modifiers
                     mx, my = pygame.mouse.get_pos()
                     sx, sy = config.width / config.window_width, config.height / config.window_height
                     gx, gy = int(mx * sx), config.height - int(my * sy) - 1
                     if 0 <= gx < config.width and 0 <= gy < config.height:
                         engine.push_undo_snapshot()
-                        if pygame.key.get_mods() & pygame.KMOD_SHIFT:
+                        mods = pygame.key.get_mods()
+                        if mods & pygame.KMOD_SHIFT:
                             engine.trigger_big_explosion(gx, gy)
+                        elif mods & pygame.KMOD_CTRL:
+                            engine.trigger_thermobaric(gx, gy)
+                        elif mods & pygame.KMOD_ALT:
+                            engine.trigger_deflagration(gx, gy)
                         else:
                             engine.trigger_explosion(gx, gy)
                         sfx.play_event("explosion")
@@ -503,12 +534,44 @@ def main() -> None:
 
         # Step simulation
         if not paused:
-            engine.step(dt)
-            performance_overlay.update_fps(dt)
-            engine.pipeline.update_quality_tier(performance_overlay.current_fps)
+            try:
+                engine.step(dt)
+                performance_overlay.update_fps(dt)
+                engine.pipeline.update_quality_tier(performance_overlay.current_fps)
+            except Exception as e:
+                # Phase 4: Handle context errors during simulation step
+                if "context" in str(e).lower() or "opengl" in str(e).lower():
+                    print(f"OpenGL context error during simulation: {e}")
+                    try:
+                        # Attempt context recovery
+                        ctx_manager.recreate_context()
+                        shaders = load_all_shaders(ctx_manager.get_context())
+                        engine.pipeline.set_shaders(shaders)
+                        print("Context recovery successful")
+                    except Exception as recovery_error:
+                        print(f"Context recovery failed: {recovery_error}")
+                        running = False
+                else:
+                    raise
 
         # Render
-        engine.render()
+        try:
+            engine.render()
+        except Exception as e:
+            # Phase 4: Handle context errors during render
+            if "context" in str(e).lower() or "opengl" in str(e).lower():
+                print(f"OpenGL context error during render: {e}")
+                try:
+                    # Attempt context recovery
+                    ctx_manager.recreate_context()
+                    shaders = load_all_shaders(ctx_manager.get_context())
+                    engine.pipeline.set_shaders(shaders)
+                    print("Context recovery successful")
+                except Exception as recovery_error:
+                    print(f"Context recovery failed: {recovery_error}")
+                    running = False
+            else:
+                raise
 
         # Render HUD
         if hud:

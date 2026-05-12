@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pathlib import Path
 
 import yaml
@@ -14,7 +16,7 @@ _YAML_PATH = Path(__file__).parent / "materials.yaml"
 _CONSTANT_KEYS = {"dft"}
 
 
-def load_material_definitions(path: Path | None = None) -> dict[int, dict]:
+def load_material_definitions(path: Path | None = None) -> dict[str, dict[str, Any]]:
     """Load material definitions from YAML, returning {id: {key: value, ...}}.
 
     Values of ``dft`` equal to the string ``"TEMP_AMBIENT"`` are replaced
@@ -22,11 +24,10 @@ def load_material_definitions(path: Path | None = None) -> dict[int, dict]:
     """
     src = path or _YAML_PATH
     with open(src, encoding="utf-8") as f:
-        raw: dict = yaml.safe_load(f)
+        raw: dict[str, Any] = yaml.safe_load(f)
 
-    definitions: dict[int, dict] = {}
+    definitions: dict[str, dict[str, Any]] = {}
     for mat_id, props in raw.items():
-        mat_id = int(mat_id)
         defs = dict(props)
         # Resolve constant references
         for key in _CONSTANT_KEYS:

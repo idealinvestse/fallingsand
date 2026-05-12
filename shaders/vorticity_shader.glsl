@@ -1,3 +1,5 @@
+#version 430
+
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(rg32f, binding = 3) uniform readonly image2D velTex;

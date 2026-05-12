@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-
-import numpy as np
+from typing import Any
 
 from core.constants import NUM_TYPES, RULE_STRIDE
 from core.types import Material, Category, StateFamily
@@ -12,13 +11,13 @@ from simulation.yaml_loader import load_material_definitions
 
 # Material definitions loaded from materials.yaml at import time.
 # See materials.yaml for the canonical source of truth.
-_MATERIAL_DEFINITIONS = load_material_definitions()
+_MATERIAL_DEFINITIONS: dict[str, dict[str, Any]] = load_material_definitions()
 
 
 class MaterialRegistry:
     """Registry for all simulation materials."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._materials: dict[int, Material] = {}
         self._initialize_materials()
         self._validate_materials()
@@ -39,7 +38,7 @@ class MaterialRegistry:
         # Temporarily replace the module-level definitions
         global _MATERIAL_DEFINITIONS
         _original = _MATERIAL_DEFINITIONS
-        _MATERIAL_DEFINITIONS = legacy_defs
+        _MATERIAL_DEFINITIONS = legacy_defs  # type: ignore[assignment]
 
         try:
             registry = cls.__new__(cls)
@@ -52,7 +51,8 @@ class MaterialRegistry:
 
     def _initialize_materials(self) -> None:
         """Initialize materials from definitions."""
-        for mat_id, defs in _MATERIAL_DEFINITIONS.items():
+        for mat_id_str, defs in _MATERIAL_DEFINITIONS.items():
+            mat_id = int(mat_id_str)  # Convert string key to int
             self._materials[mat_id] = Material(
                 name=defs["name"],
                 color=defs["color"],
@@ -277,7 +277,7 @@ class MaterialRegistry:
         if life is None:
             life = mat.default_flame_life
         packed = (material_id & 0xFF) | ((life & 0xFF) << 8) | ((flags & 0xFF) << 16)
-        return np.uint32(packed)
+        return int(packed)
 
 
 # Global instance for backward compatibility

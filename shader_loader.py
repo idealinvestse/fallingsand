@@ -1,10 +1,12 @@
 """Shader loading utilities with preprocessing support for #include directives."""
 
+from typing import Any
+
 import re
 from pathlib import Path
 
 
-def load_shader(path: Path, common_path: Path = None) -> str:
+def load_shader(path: Path, common_path: Path | None = None) -> str:
     """
     Load a shader file with preprocessing support.
 
@@ -26,12 +28,12 @@ def load_shader(path: Path, common_path: Path = None) -> str:
     source = path.read_text(encoding='utf-8')
 
     # Process includes
-    source = _process_includes(source, path.parent, set())
+    source = _process_includes(source, path.parent, set[str]())
 
     return source
 
 
-def _process_includes(source: str, base_dir: Path, included: set) -> str:
+def _process_includes(source: str, base_dir: Path, included: set[str]) -> str:
     """
     Recursively process #include directives.
 
@@ -46,7 +48,7 @@ def _process_includes(source: str, base_dir: Path, included: set) -> str:
     # Pattern to match #include "filename"
     include_pattern = r'#include\s+"([^"]+)"'
 
-    def replace_include(match):
+    def replace_include(match: re.Match[str]) -> str:
         filename = match.group(1)
         include_path = base_dir / filename
 
@@ -67,7 +69,7 @@ def _process_includes(source: str, base_dir: Path, included: set) -> str:
     return re.sub(include_pattern, replace_include, source)
 
 
-def load_shader_with_defines(path: Path, defines: dict = None, common_path: Path = None) -> str:
+def load_shader_with_defines(path: Path, defines: dict[str, Any] | None = None, common_path: Path | None = None) -> str:
     """
     Load a shader with custom #define directives prepended.
 

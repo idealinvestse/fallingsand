@@ -101,9 +101,10 @@ class PerformanceOverlay(OverlayRenderer):
         if len(points) >= 2:
             pygame.draw.lines(surf, theme.ACCENT_CYAN, False, points, 2)
 
-        # Draw budget line
-        budget_y = graph_rect.bottom - (self.current_fps / 60.0) * graph_rect.height
-        pygame.draw.line(surf, theme.ACCENT_RED, (graph_rect.x, budget_y), (graph_rect.right, budget_y), 1)
+        # Draw budget line (target FPS)
+        target_fps = 55.0
+        budget_y = graph_rect.bottom - (target_fps / 60.0) * graph_rect.height
+        pygame.draw.line(surf, theme.ACCENT_GREEN, (graph_rect.x, budget_y), (graph_rect.right, budget_y), 1)
 
     def _render_pass_timings(self, surf):
         """Render per-pass timing bars."""
@@ -145,19 +146,40 @@ class PerformanceOverlay(OverlayRenderer):
             y += 28
 
     def _render_memory_usage(self, surf):
-        """Render memory usage and quality tier."""
+        """Render memory usage, quality tier, and status indicators."""
         y = 220
         font = theme.font(9)
-        
+
         # Quality tier indicator
         if self.pipeline and self.pipeline.config.adaptive_quality:
             tier_names = ["High", "Medium", "Low"]
-            tier_name = tier_names[self.pipeline.quality_tier_index]
-            tier_color = theme.ACCENT_GREEN if self.pipeline.quality_tier_index == 0 else (theme.ACCENT_YELLOW if self.pipeline.quality_tier_index == 1 else theme.ACCENT_RED)
+            tier_idx = self.pipeline.quality_tier_index
+            tier_name = self.pipeline.config.quality_tiers[tier_idx].get("name", tier_names[tier_idx])
+            tier_color = theme.ACCENT_GREEN if tier_idx == 0 else (theme.ACCENT_YELLOW if tier_idx == 1 else theme.ACCENT_RED)
             tier_text = font.render(f"Quality: {tier_name}", True, tier_color)
             surf.blit(tier_text, (16, y))
             y += 12
-        
-        # Memory usage (placeholder)
-        mem_text = font.render("Memory: ~256 MB (est.)", True, theme.TEXT_DIM)
-        surf.blit(mem_text, (16, y))
+
+        # Sparse mode status
+        if self.pipeline:
+            sparse_enabled = self.pipeline.sparse_mask.sparse_enabled
+            sparse_text = f"Sparse: {'ON' if sparse_enabled else 'OFF'}"
+            sparse_color = theme.ACCENT_GREEN if sparse_enabled else theme.TEXT_DIM
+            surf.blit(font.render(sparse_text, True, sparse_color), (16, y))
+            y += 12
+
+        # Adaptive quality status
+        if self.pipeline and self.pipeline.config.adaptive_quality:
+            adaptive_text = "Adaptive: ON"
+            surf.blit(font.render(adaptive_text, True, theme.ACCENT_GREEN), (16, y))
+            y += 12
+
+        # VRAM estimation (based on grid size and textures)
+        if self.pipeline:
+            # Estimate VRAM: cells (4 bytes * width * height * 2 for double buffer)
+            # + textures (velocity, pressure, temperature, etc.)
+            grid_mb = (self.pipeline.width * self.pipeline.height * 4 * 2) / (1024 * 1024)
+            textures_mb = 100  # Approximate texture memory
+            total_mb = grid_mb + textures_mb
+            mem_text = font.render(f"VRAM: ~{total_mb:.0f} MB (est.)", True, theme.TEXT_DIM)
+            surf.blit(mem_text, (16, y))

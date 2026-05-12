@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -26,19 +25,19 @@ def _migrate_v6_cells(cell_bytes: bytes, count: int) -> bytes:
     typ = grid & 0xFF
     life = (grid >> 16) & 0xFF
     flags = (grid >> 24) & 0xFF
-    grid = typ | (life << 8) | (flags << 16)
+    grid = typ | (life << 8) | (flags << 16)  # type: ignore[assignment]
     return grid.tobytes()
 
 
 class PersistenceManager:
     """Handles save/load and undo for the simulation grid state."""
 
-    def __init__(self, width: int, height: int, atm_pressure: float = 0.0) -> None:
+    def __init__(self, buffers: BufferManager, width: int, height: int, atm_pressure: float = 0.0) -> None:
         self.width = width
         self.height = height
         self.atm_pressure = atm_pressure
-        self.buffers = None  # Set by engine
-        self._undo_stack: list[np.ndarray] = []
+        self.buffers = buffers
+        self._undo_stack: list[np.ndarray] = []  # type: ignore[type-arg]
         self._max_undo = 10
         self._loaded_v8 = False  # Track if loaded save was v8 format
         self._save_format = 7  # Default to v7, can be set to 8
@@ -56,6 +55,7 @@ class PersistenceManager:
         if use_v8 or self._save_format == 8 or self._loaded_v8:
             self._save_state_v8(filepath)
             return
+        assert self.buffers is not None  # Set by engine before calling
         cell_bytes = self.buffers.save_state()
         temp_bytes = self.buffers.temp_a.read()
         header = bytearray()
@@ -68,6 +68,7 @@ class PersistenceManager:
 
     def _save_state_v8(self, filepath: Path) -> None:
         from simulation.persistence_v8 import V8Writer
+        assert self.buffers is not None  # Set by engine before calling
         w = V8Writer(self.width, self.height)
         w.add_cells(self.buffers.save_state())
         w.add_temperature(self.buffers.temp_a.read())
@@ -91,14 +92,16 @@ class PersistenceManager:
             pass
         w.write(filepath)
 
-    def get_state(self) -> np.ndarray:
+    def get_state(self) -> np.ndarray:  # type: ignore[type-arg]
+        assert self.buffers is not None  # Set by engine before calling
         return np.frombuffer(self.buffers.get_read_buf().read(), dtype=np.uint32).copy()
 
-    def set_state(self, state: np.ndarray) -> None:
+    def set_state(self, state: np.ndarray) -> None:  # type: ignore[type-arg]
         expected = self.width * self.height
         if state.size != expected:
             raise ValueError(f"State has {state.size} cells, expected {expected}")
         data = state.astype(np.uint32, copy=False).tobytes()
+        assert self.buffers is not None  # Set by engine before calling
         self.buffers.get_read_buf().write(data)
         self.buffers.get_write_buf().write(data)
 
@@ -119,6 +122,7 @@ class PersistenceManager:
         self._loaded_v8 = False
 
     def _load_state_v7(self, raw: bytes) -> None:
+        assert self.buffers is not None  # Set by engine before calling
         expected_cell_bytes = self.width * self.height * 4
 
         if raw[:4] == _SAVE_MAGIC:
@@ -168,6 +172,7 @@ class PersistenceManager:
         self.buffers.clear_physics_buffers(ambient_pressure=self.atm_pressure)
 
     def _load_state_v8(self, filepath: Path) -> None:
+        assert self.buffers is not None  # Set by engine before calling
         from simulation.persistence_v8 import V8Reader
         r = V8Reader(filepath)
         if (r.width, r.height) != (self.width, self.height):
@@ -217,6 +222,7 @@ class PersistenceManager:
     def undo(self) -> bool:
         if not self._undo_stack:
             return False
+        assert self.buffers is not None  # Set by engine before calling
         prev = self._undo_stack.pop()
         self.set_state(prev)
         # Reset fluid dynamics so the restored grid doesn't inherit

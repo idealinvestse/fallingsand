@@ -231,7 +231,7 @@ class V8Reader:
         data = self._chunks.get(TAG_META)
         if data is None:
             return {}
-        return json.loads(data.decode("utf-8"))
+        return json.loads(data.decode("utf-8"))  # type: ignore[no-any-return]
 
     def get_velocity(self) -> bytes | None:
         return self._chunks.get(TAG_VEL2)

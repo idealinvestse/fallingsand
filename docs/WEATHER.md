@@ -2,12 +2,13 @@
 
 ## Overview
 
-Atmospheric humidity, condensation, evaporation, and rain simulation. The weather system models the water cycle including humidity diffusion through air, wind-driven advection, evaporation from water surfaces, condensation into rain, and precipitation mechanics.
+Atmospheric humidity diffusion, wind advection, evaporation from water, condensation when saturated, and rain mechanics. The weather system models atmospheric processes including humidity transport, phase changes, and precipitation.
 
 ## Algorithm
 
 ### Humidity Field
 
+Humidity diffuses through air/gas materials and is advected by wind:
 Humidity represents atmospheric water vapor concentration and diffuses through gaseous materials:
 
 1. **Diffusion**: 4-neighbor stencil weighted by material type:
@@ -101,6 +102,39 @@ Precipitation mechanics for falling water:
    - Planned: High humidity reduces bio decay rate
    - Implementation: Read humidity field in biology_step.glsl
    - Effect: Damp environments preserve bio materials longer
+
+## v7.0 Plasma Atmospheric Effects
+
+### Plasma Materials and Weather
+
+Plasma materials (plasma, lightning_plasma) have significant atmospheric interactions:
+
+1. **Heat Injection**: Plasma's extreme temperature (>300°C) heats the atmosphere:
+   - Increases local air temperature
+   - Can create thermal updrafts
+   - Enhances evaporation from nearby water
+
+2. **Ionization Effects**: Plasma ionizes surrounding air:
+   - May affect electrical conductivity of atmosphere
+   - Can create lightning pathways
+   - Enhances electrical arc breakdown in humid conditions
+
+3. **Pressure Disruption**: Plasma expansion creates pressure waves:
+   - Can disrupt wind patterns
+   - Creates temporary pressure gradients
+   - May affect humidity transport
+
+4. **Humidity Interaction**: Plasma's heat evaporates water rapidly:
+   - Increases local humidity significantly
+   - Can create steam clouds
+   - Enhances condensation downwind
+
+### Weather Interaction Examples
+
+- **Plasma over water**: Rapid evaporation creates dense steam clouds
+- **Plasma in humid air**: Enhanced electrical conductivity, frequent lightning
+- **Plasma-induced updrafts**: Can create localized weather patterns
+- **Plasma cooling**: As plasma recombines, it can trigger rain in saturated air
 
 ## Shader Bindings
 

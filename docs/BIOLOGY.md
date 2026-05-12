@@ -48,6 +48,56 @@ Moisture diffuses through all materials and is affected by temperature:
 
 Bio materials follow a growth/decay cycle:
 
+1. **Growth Condition**: `nut > 0.1 AND moist > 0.1 AND temp > 100.0`
+2. **Growth Rate**: Material-specific (plant: 0.15, slime: 0.2, blood: 0.1, virus: 0.25)
+3. **Decay Condition**: Not meeting growth conditions
+4. **Decay Rate**: Material-specific (plant: 0.05, slime: 0.1, blood: 0.08, virus: 0.15)
+
+## v7.0 New Material Biological Properties
+
+### Magnetic Materials
+Magnetic materials (magnet, magnet_south) have no biological properties (`biomass: 0.0`):
+- Do not consume or produce nutrients
+- Do not consume or produce moisture
+- Do not grow or decay
+- Act as inert solids in biological simulations
+
+### Plasma Materials
+Plasma materials (plasma, lightning_plasma) have no biological properties but interact with biology:
+- **Sterilization effect**: Plasma's extreme temperature (>300°C) can sterilize nearby biological materials
+- **Ignition**: Plasma instantly ignites combustible bio materials (plant, wood)
+- **No nutrient/moisture interaction**: Plasma does not consume or produce nutrients or moisture
+
+### Glass Materials
+Glass materials (glass, obsidian) have no biological properties:
+- Do not consume or produce nutrients
+- Do not consume or produce moisture
+- Do not grow or decay
+- Act as impermeable barriers in biological simulations
+- Glass shattering can create pathways for biological spread
+
+### Enhanced Materials
+**thermite_enhanced**: No biological properties, but extreme heat affects nearby biology
+**acid_glass_corrosive**: No biological properties, but may interact with bio materials in future
+
+## Material Properties
+
+### BiologyProps (simulation/material_schema.py)
+
+```python
+@dataclass(slots=True)
+class BiologyProps:
+    biomass: float = 0.0
+    growth_rate: float = 0.0
+    decay_rate: float = 0.0
+    nutrient_value: float = 0.0
+```
+
+- **biomass**: 0.0 (inert) to 1.0 (fully biological). Determines if material participates in biological cycles.
+- **growth_rate**: Growth speed when conditions are met.
+- **decay_rate**: Decay speed when conditions are not met.
+- **nutrient_value**: Nutrient content when decayed (returned to soil).
+
 1. **Growth Conditions**: All of the following must be true:
    - Nutrient > 0.1
    - Moisture > 0.1

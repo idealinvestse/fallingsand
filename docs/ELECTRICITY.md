@@ -19,7 +19,7 @@ The electricity pass uses a 4-neighbor stencil diffusion algorithm:
    wU = (r.cond * cU) / max(r.cond + cU, 1e-6) * 2.0
    flux = wL*(qL - q) + wR*(qR - q) + wD*(qD - q) + wU*(qU - q)
    ```
-3. **Explicit Integration**: 
+3. **Explicit Integration**:
    ```
    rate = 4.0  # heuristic diffusion speed
    qNew = q + clamp(flux * rate * dt, -maxCharge, maxCharge)
@@ -32,6 +32,35 @@ The electricity pass uses a 4-neighbor stencil diffusion algorithm:
    ```
    qNew = clamp(qNew, -maxCharge, maxCharge)
    ```
+
+### v6.1 Cross-System Interactions
+
+#### Moisture-Based Conductivity Boost (Rule A)
+Moisture significantly enhances electrical conductivity, simulating electrolyte solutions:
+```
+moistureBoost = 1.0 + moisture * electricity_moisture_boost
+effectiveCond = r.cond * moistureBoost
+```
+Wet conductors propagate charge faster and more effectively.
+
+#### Electrolysis Charge Transport (Rule A part 2)
+Charged liquid cells conduct via velocity field:
+```
+if(r.cat == 2 && length(v) > 0.5 && abs(q) > 10.0) {
+    transport = q * electrolysis_strength * length(v) * dt
+    qNew -= transport  // Lose charge to downstream
+}
+```
+Moving conductors carry charge downstream, enabling electrolysis-like behavior.
+
+#### v7.0 Plasma Conductivity Enhancement
+Plasma materials (state family 3) have maximum conductivity and faster propagation:
+```
+if(r.sf == 3){  // plasma state family
+    effectiveCond = 1.0;  // Override to maximum
+    rate = 8.0;  // Faster propagation
+}
+```
 
 ### Arc Breakdown (electricity_arc.glsl)
 
@@ -47,6 +76,53 @@ Arc breakdown occurs when charge exceeds the material's breakdown threshold:
 ## Material Properties
 
 ### ElectricalProps (simulation/material_schema.py)
+
+```python
+@dataclass(slots=True)
+class ElectricalProps:
+    conductivity: float = 0.0
+    capacitance: float = 0.0
+    breakdown_voltage: float = 0.0
+    arc_emission: float = 0.0
+```
+
+- **conductivity**: 0.0 (insulator) to 1.0 (perfect conductor). Controls charge diffusion rate.
+- **capacitance**: Charge storage capacity (future use).
+- **breakdown_voltage**: Threshold for arc breakdown.
+- **arc_emission**: Tendency to emit arcs when charged.
+
+## Cross-System Coupling
+
+### Electricity → Thermal
+Arc breakdown injects heat into the thermal system, enabling electrical heating.
+
+### Electricity → Fluid Dynamics
+Arc breakdown writes pressure pulses to the divergence field, creating shockwaves.
+
+### Fluid Dynamics → Electricity
+Liquid velocity transports charge via electrolysis (v6.1 Rule A part 2).
+
+### Biology → Electricity
+Moisture enhances conductivity (v6.1 Rule A).
+
+## v7.0 Magnetic Interactions
+
+Magnetic materials can trigger thermite ignition when heated above 150°C, enabling electromagnetic ignition of explosives. This is implemented in the chain reaction logic in `state_shader.glsl`.
+
+## Usage
+
+### Brush Charge Injection
+Mode 4 brush injects charge into the charge field:
+```python
+brush.apply_brush(x, y, material_id, mode=4, charge_delta=10.0)
+```
+
+### CLI Flags
+- `--charge-decay`: Exponential decay rate per frame
+- `--max-charge`: Hard cap for charge accumulation
+- `--breakdown-threshold`: Voltage threshold for arc breakdown
+- `--arc-temp-delta`: Temperature increase on arc breakdown
+- `--arc-pressure-pulse`: Pressure pulse magnitude on arc breakdown
 
 - **conductivity** (float): Electrical conductivity, range [0.0, 1.0]
   - 0.0 = perfect insulator (charge frozen)

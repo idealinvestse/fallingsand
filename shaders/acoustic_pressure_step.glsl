@@ -1,3 +1,5 @@
+#version 430
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Acoustic pressure step (weakly-compressible gas solver)
 //

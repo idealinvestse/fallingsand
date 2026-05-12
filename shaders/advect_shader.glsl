@@ -1,3 +1,5 @@
+#version 430
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Advection / cell transport pass (v5.5 - Phase 5: Velocity-driven)
 //

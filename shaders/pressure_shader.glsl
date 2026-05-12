@@ -1,3 +1,5 @@
+#version 430
+
 layout(local_size_x = 16, local_size_y = 16) in;
 
 layout(std430, binding = 0) readonly buffer CellBuffer { uint cells[]; };
@@ -49,6 +51,11 @@ float samplePressure(ivec2 p, ivec2 self_p){
     }
     return imageLoad(pressureIn, p).x;
 }
+
+// ── Pressure clamping for stability (Phase 4) ────────────────────────────────────
+const float PRESSURE_MIN = -500.0;
+const float PRESSURE_MAX = 5000.0;
+const float PRESSURE_EMERGENCY_RESET = 10000.0;
 
 void main(){
     ivec2 p = ivec2(gl_GlobalInvocationID.xy);
@@ -108,5 +115,20 @@ void main(){
 
     // p_self = (Σ w_n p_n − div) / Σ w_n
     float pNew = (wL*pL_v + wR*pR_v + wD*pD_v + wU*pU_v - div) / wSum;
+
+    // Emergency detection: if pressure exceeds emergency threshold, fallback to previous
+    // This prevents catastrophic numerical instability during extreme explosions
+    if (abs(pNew) > PRESSURE_EMERGENCY_RESET) {
+        pNew = pC;  // Fallback to previous value
+    }
+
+    // Clamp to prevent explosions
+    pNew = clamp(pNew, PRESSURE_MIN, PRESSURE_MAX);
+
+    // NaN guard
+    if (isnan(pNew) || isinf(pNew)) {
+        pNew = pC;  // Fallback to previous
+    }
+
     imageStore(pressureOut, p, vec4(pNew, 0.0, 0.0, 0.0));
 }

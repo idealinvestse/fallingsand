@@ -219,15 +219,56 @@ class HUD:
         
         # Tooltip if hovering
         if 0 <= self.hover_cell < self.num_types:
-            name = self.particles[self.hover_cell].name.upper()
-            txt = theme.font(11, bold=True).render(name, True, theme.TEXT_PRIMARY)
-            tw = txt.get_width() + 20
-            th = 24
+            material = self.particles[self.hover_cell]
+            name = material.name.upper()
+            description = getattr(material, 'description', '')
+            
+            # Calculate tooltip size
+            name_txt = theme.font(11, bold=True).render(name, True, theme.TEXT_PRIMARY)
+            name_w = name_txt.get_width()
+            
+            if description:
+                # Word wrap description
+                desc_words = description.split()
+                desc_lines = []
+                current_line = []
+                current_width = 0
+                max_width = 300
+                
+                for word in desc_words:
+                    word_width = theme.font(10).render(word, True, theme.TEXT_BODY).get_width()
+                    if current_width + word_width + 4 <= max_width:
+                        current_line.append(word)
+                        current_width += word_width + 4
+                    else:
+                        desc_lines.append(' '.join(current_line))
+                        current_line = [word]
+                        current_width = word_width + 4
+                if current_line:
+                    desc_lines.append(' '.join(current_line))
+                
+                # Calculate dimensions
+                tw = max(name_w + 20, max_width + 20)
+                th = 24 + len(desc_lines) * 14 + 8
+            else:
+                tw = name_w + 20
+                th = 24
+            
             tx = (self.window_width - tw) // 2
             ty = palette_bottom + 5
             t_rect = pygame.Rect(tx, ty, tw, th)
             theme.rounded_panel(hud_surface, t_rect, radius=6, fill=(30, 35, 50, 240), shadow=False)
-            hud_surface.blit(txt, (tx + 10, ty + 4))
+            
+            # Render name
+            hud_surface.blit(name_txt, (tx + 10, ty + 4))
+            
+            # Render description
+            if description:
+                desc_y = ty + 24
+                for line in desc_lines:
+                    desc_txt = theme.font(10).render(line, True, theme.TEXT_BODY)
+                    hud_surface.blit(desc_txt, (tx + 10, desc_y))
+                    desc_y += 14
 
         # 2. Brush Info (left column under the palette)
         info = self._create_brush_info_surface()

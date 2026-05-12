@@ -4,15 +4,30 @@ GPU-accelerated falling-sand simulation built with Python, Pygame, ModernGL, and
 
 Multi-pass GPU pipeline: materials, thermal state, liquid behavior, pressure/velocity fields, acoustic pressure waves, electricity propagation, biology/ecology, weather, explosions, and final rendering with ambient occlusion and emissive glow.
 
-## Current Version Model
+## Current Version
+
+**v7.0 Evolution** — Final polish, comprehensive testing, and public release preparation.
+
+### Phase 4 Enhancements
+
+- **Pressure solver stabilization**: Enhanced clamping (-500.0/5000.0), emergency reset on extreme values, grid-size-aware hydrostatic gradient
+- **OpenGL context loss handling**: Automatic detection and recovery with shader reloading, window resize support
+- **Memory management for large grids**: VRAM estimation and warnings for grids > 1024×1024
+- **Material property validation**: GPU-safe range checks and NaN/inf detection at startup
+- **Comprehensive testing**: Cross-system interaction tests, edge-case tests, save/load migration tests, automated manual checklist
+- **Release preparation**: Enhanced PyInstaller build script, updated documentation, release checklist
+
+See `docs/CHANGELOG.md` for complete implementation history.
+
+## Version Model
 
 The project separates user-facing version labels from internal compatibility versions:
 
-- **Application line**: v6.0 Genesis — multi-pass GPU simulation.
+- **Application line**: v7.0 Evolution — final polish and release preparation.
 - **Save format**: `FSND` v7 (legacy) and `FSND` v8 (chunked binary with CRC32).
 - **Cell layout**: `type[0..7] | life[8..15] | flags[16..23] | unused[24..31]`.
 - **Temperature storage**: `r32f` float textures are the authoritative temperature store.
-- **Material rule stride**: `RULE_STRIDE = 49`.
+- **Material rule stride**: `RULE_STRIDE = 61` (increased in v7.0 for new material properties).
 
 See `docs/SAVE_FORMAT.md`, `docs/MATERIALS.md`, and `docs/GPU_PIPELINE.md` for implementation details.
 
