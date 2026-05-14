@@ -271,9 +271,12 @@ void main(){
             bool canMove = false;
             if (tcType == T_AIR) {
                 canMove = true;
-            } else if (rt.cat == 2 && r.density > rt.density) {
-                // Denser liquid displaces lighter liquid
-                canMove = true;
+            } else if (rt.cat == 2) {
+                bool differentLiquid = tcType != typ;
+                bool densityStratifies = r.density > rt.density + (differentLiquid ? 0.02 : 0.0);
+                bool oilWaterLayering = (typ == T_WATER && tcType == T_OIL && tc.y > p.y) ||
+                                        (typ == T_OIL && tcType == T_WATER && tc.y < p.y);
+                canMove = densityStratifies || oilWaterLayering;
             }
 
             if (!canMove) continue;

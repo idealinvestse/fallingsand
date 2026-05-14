@@ -157,13 +157,33 @@ void main(){
         v.y -= gravity * 1.25 * dt;
         v.y += gravity * max(0.0, dT) * 0.10 * thermalBuoyancyScale * dt;
     } else if(r.cat == 2){
-        // Liquid: gravity + density-based buoyancy (hot liquid rises).
-        // Heavier liquids (higher density) fall faster than lighter ones to enable separation.
-        float densityScale = r.density / 2.0; // Water (rho=2.0) is the baseline 1.0g
+        float ambientLiquidDensity = 2.0;
+        float liquidWeight = 0.0;
+        vec2 liquidSep = vec2(0.0);
+        ivec2 offsets[4] = {ivec2(1,0), ivec2(-1,0), ivec2(0,1), ivec2(0,-1)};
+        for(int i = 0; i < 4; i++){
+            ivec2 np = p + offsets[i];
+            if(!inBounds(np, gridSize)) continue;
+            uint nt = getType(cells[uint(np.y) * gridSize.x + uint(np.x)]);
+            Rule nr = getRule(nt, ruleStride);
+            if(nr.cat == 2){
+                ambientLiquidDensity += nr.density;
+                liquidWeight += 1.0;
+                if(nt != typ){
+                    liquidSep += vec2(offsets[i]) * clamp(nr.density - r.density, -1.0, 1.0);
+                }
+            }
+        }
+        ambientLiquidDensity /= (1.0 + liquidWeight);
+        // Liquid: gravity + density-based buoyancy relative to surrounding liquid.
+        float densityScale = effectiveDensity / max(ambientLiquidDensity, 0.1);
         v.y -= gravity * densityScale * dt;
-        
-        float liqBuoy = (r.density - effectiveDensity) / RHO_REF;
+
+        float liqBuoy = (ambientLiquidDensity - effectiveDensity) / RHO_REF;
         v.y += gravity * liqBuoy * 0.35 * thermalBuoyancyScale * dt;
+        if(length(liquidSep) > 0.001){
+            v += normalize(liquidSep) * surfaceTensionStrength * r.st * 0.35 * dt;
+        }
     } else if(r.cat == 0){
         // Gas: buoyancy relative to ambient air density.
         //   Base term: (ρ_air − ρ_0). Air (ρ=0.12) → 0 (neutral, no self-buoyancy).
@@ -322,6 +342,9 @@ void main(){
     if((typ == T_FIRE || typ == T_EMBER || typ == T_CHAR || typ == T_SOOT || typ == T_BLAST) && length(windVector) > 0.01){
         float windCoupling = (typ == T_CHAR) ? 0.55 : ((typ == T_SOOT) ? 1.15 : 1.4);
         v += windVector * dt * windCoupling;
+    }
+    if(typ == T_FIRE && (flg & 1u) != 0u){
+        v *= 0.72;
     }
 
     // Turbulence

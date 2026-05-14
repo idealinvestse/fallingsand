@@ -43,7 +43,8 @@ class TestBurnRealism:
         oil = get_material(6)
         assert oil.flammability >= 0.75
         assert oil.phase_high_temp >= 175
-        assert oil.oxygen_requirement >= 0.5
+        assert 0.4 <= oil.oxygen_requirement <= 0.5
+        assert oil.wet_ignition_penalty <= 26
         assert oil.burn_to == 58  # heavy smoke/soot residue
         assert oil.default_flame_temp == 96  # TEMP_AMBIENT: oil must not auto-ignite when placed
         assert oil.default_flame_life == 0

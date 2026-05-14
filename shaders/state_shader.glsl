@@ -462,9 +462,9 @@ void main(){
                         return;
                     }
                 }
-                uint nl = 20u + uint(r.flamm * 60.0);
+                uint nl = (typ == T_OIL) ? 26u : (20u + uint(r.flamm * 60.0));
                 uint igniteType = (r.cat == 2 || r.cat == 0) ? T_FIRE : T_EMBER;
-                writeCell(idx, p, igniteType, max(temp, highT), nl, 0u);
+                writeCell(idx, p, igniteType, typ == T_OIL ? min(max(temp, highT + 18.0), 210.0) : max(temp, highT), nl, typ == T_OIL ? 1u : 0u);
                 return;
             }
         }
@@ -524,14 +524,15 @@ void main(){
 
     if(typ == T_FIRE){
         // Self-heating: fire temperature rises over time
-        temp += 4.0 * (1.0 - effectiveWet * 0.75);
+        float oilFireDamp = (flg & 1u) != 0u ? 0.58 : 1.0;
+        temp += 4.0 * oilFireDamp * (1.0 - effectiveWet * 0.75);
         // ── Oxygen-dependent combustion ────────────────────────────────────
         // Count O2 neighbours and consume them based on o2Req/o2Yield.
         if(explicitO2Count > 0 && r.o2Req > 0.0){
             // O2 available: sustain combustion
-            life = min(255u, life + uint(8.0 * (1.0 - effectiveWet * 0.75) * wetBurnFactor));
+            life = min(255u, life + uint(8.0 * oilFireDamp * (1.0 - effectiveWet * 0.75) * wetBurnFactor));
             // Extra heat when well-fed
-            if(explicitO2Count >= 2) temp += 4.0 * (1.0 - effectiveWet * 0.75);
+            if(explicitO2Count >= 2) temp += 4.0 * oilFireDamp * (1.0 - effectiveWet * 0.75);
         } else {
             // No O2 nearby: suffocation
             bool hasAir = (tn == T_AIR || ts == T_AIR || te == T_AIR || tw == T_AIR);

@@ -81,3 +81,26 @@ class TestMoistureMaterialProperties:
         assert "typ == T_CHAR" in src
         assert "typ == T_SOOT" in src
         assert "typ == T_HOT_ASH" in src
+
+
+class TestOilRegression:
+    def test_oil_ignition_is_not_overly_strict(self):
+        oil = get_material(6)
+        assert oil.oxygen_requirement <= 0.45
+        assert oil.phase_high_temp <= 175
+        assert oil.wet_ignition_penalty <= 26
+        assert oil.viscosity >= 0.55
+
+    def test_oil_water_layering_logic_exists(self):
+        advect = (ROOT / "shaders" / "advect_shader.glsl").read_text(encoding="utf-8")
+        force = (ROOT / "shaders" / "force_shader.glsl").read_text(encoding="utf-8")
+        assert "oilWaterLayering" in advect
+        assert "ambientLiquidDensity" in force
+        assert "liquidSep" in force
+
+    def test_oil_fire_is_damped_not_takeover_plume(self):
+        state = (ROOT / "shaders" / "state_shader.glsl").read_text(encoding="utf-8")
+        force = (ROOT / "shaders" / "force_shader.glsl").read_text(encoding="utf-8")
+        assert "oilFireDamp" in state
+        assert "typ == T_OIL ? 1u : 0u" in state
+        assert "(flg & 1u) != 0u" in force

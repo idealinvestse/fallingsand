@@ -304,14 +304,14 @@
   flamm: 0.80
   k: 0.08
   phi_h: 4
-  Th: 185
+  Th: 175
   phi_l: 6
   Tl: 0
   cond: 0.0
   emit: 0.0
   cool: 0.015
   bto: 58
-  visc: 0.45
+  visc: 0.55
   turb: 0.08
   wd: 1
   dft: TEMP_AMBIENT
@@ -339,11 +339,11 @@
   rxn3_pn: 0
   rxn3_prob: 0.0
   rxn3_tt: 0
-  o2_req: 0.55
-  o2_yield: 0.2
+  o2_req: 0.45
+  o2_yield: 0.25
   moisture_resistance: 0.35
-  wet_ignition_penalty: 34
-  wet_burn_rate_multiplier: 0.75
+  wet_ignition_penalty: 24
+  wet_burn_rate_multiplier: 0.82
 
 7:
   name: acid
