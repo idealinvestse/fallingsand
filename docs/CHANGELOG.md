@@ -2,6 +2,35 @@
 
 Consolidated implementation history for the Falling Sand simulation.
 
+## v7.1 Combustion Overhaul (2026-XX)
+
+### Realistic Combustion & Fire System
+
+#### Atmosphere Ignition Stabilization
+
+- Retuned gas and oil material properties to prevent large open gas/air regions from slowly self-igniting.
+- Changed air-only combustion support from an unlimited oxidizer to weak, temperature-gated ignition support.
+- Added moisture and humidity suppression in `state_shader.glsl`; wet environments dampen heat gain, raise effective ignition thresholds, and shorten fire/ember lifetime.
+
+#### Staged Burning & New Byproducts
+
+- Added `char` and `soot` material IDs for staged combustion and heavy smoke residue.
+- Organic fuels now progress through a charring/smoldering path before ember/ash residue.
+- Hydrocarbon and coal fuels now produce more soot under oxygen-poor conditions.
+- Fire residue now depends on local oxygen availability, producing smoke when oxygenated and soot when oxygen-starved.
+
+#### Weather, Wind & Cross-System Integration
+
+- State pass now reads `moisture_in` and `humidity_in` for weather-driven fire suppression.
+- Force pass now applies wind to fire, ember, char, soot, and blast fronts with material-specific coupling.
+- Napalm reaction slots now differentiate fire-contact soot production from oxygen-fed active flame.
+
+#### Tests & Documentation
+
+- Added `tests/test_combustion_stability.py` covering gas anti-runaway thresholds, weak-air ignition gates, staged charring, soot generation, moisture/humidity suppression, and wind coupling.
+- Updated material, shader, pass graph, and documentation tests for the expanded combustion behavior.
+- Expanded `docs/MATERIALS.md` with combustion stages, byproduct behavior, weather integration, and regression coverage notes.
+
 ## v7.0 Evolution (2026-XX)
 
 ### Phase 4 — Final Polish, Testing & Release Preparation

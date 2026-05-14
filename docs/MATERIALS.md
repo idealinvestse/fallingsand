@@ -19,7 +19,7 @@ Materials are data-driven and loaded from `simulation/materials.yaml` (legacy v5
 
 ## Material IDs
 
-The active material ID range is `0..48`; `core.constants.NUM_TYPES` is `49`.
+The active material ID range is `0..60`; `core.constants.NUM_TYPES` is `61`.
 
 The registry validates that material IDs, scalar ranges, reaction references, and rule-buffer length stay compatible with the GPU layout.
 
@@ -68,3 +68,43 @@ Temperature is not packed into the cell. It is stored in `r32f` textures.
 The authoritative temperature field is the double-buffered `temp_a`/`temp_b` texture pair in `gpu/buffers.py`.
 
 Save format v7 stores cell bytes and temperature bytes separately.
+
+## Combustion Stabilization
+
+Fire propagation is handled in `shaders/state_shader.glsl` using the material `flamm`, `Th`, `bto`, `o2_req`, and `o2_yield` fields from `simulation/materials.yaml`.
+
+Phase 2 combustion stabilization keeps large gas/air regions from becoming an unlimited oxidizer:
+
+- `air` is treated as a weak oxidizer in the shader. Explicit `oxygen` satisfies combustion more readily, while air-only ignition requires multiple air neighbors and higher temperature.
+- Moisture from the weather/biology moisture texture suppresses fire by damping heat gain, raising the effective ignition threshold, and shortening `fire`/`ember` life.
+- `gas` is now a controlled fuel rather than a near-instant atmospheric flame front: lower flammability, higher ignition temperature, and higher oxygen requirement.
+- `oil` still burns readily, but with a higher ignition temperature and oxygen requirement so it is less likely to ignite from incidental warming.
+
+## Combustion, Fire & Byproducts
+
+The current staged-combustion path is intentionally GPU-friendly and reuses existing cell `life`, temperature, material rules, and reaction slots:
+
+1. **Ignition:** flammable materials near fire/ember/spark gain heat and require suitable oxygen availability.
+2. **Pyrolysis/charring:** wood, plant, sugar, honey, and sap first become `char` instead of immediately becoming raw fire.
+3. **Active burning:** liquids/gases burn as `fire`; solids and char burn as `ember`.
+4. **Residue:** embers cool to `ash`; hydrocarbon and coal fuels can produce `soot` as heavy black smoke residue.
+5. **Extinguishing:** moisture suppresses heat gain, raises ignition thresholds, and drains fire/ember life.
+
+New Phase 3 byproduct materials:
+
+- `char` (`57`): solid, partially burned organic residue. It can smolder into `ember` when hot and oxidized, or cool/wet down to `ash`.
+- `soot` (`58`): dark gas/aerosol byproduct from oil, gas, napalm, and coal combustion. It is non-flammable and eventually clears/cools toward ash/air behavior.
+
+Fuel-specific byproduct behavior:
+
+- Wood/plant/sugar/honey/sap: favor `char` first, then `ember`, then `ash`.
+- Oil/gas/napalm: favor active `fire`, with `soot` more likely in oxygen-poor burning.
+- Coal/char: favor slower smoldering and darker soot/ash residues.
+- Explicit `oxygen` increases combustion intensity and reduces soot likelihood; air-only combustion is weaker and dirtier.
+
+Weather and wind integration:
+
+- The state pass reads both moisture and atmospheric humidity. Local humidity contributes to `wetSuppression`, so rain/humid air can damp heat gain, raise ignition thresholds, and shorten fire/ember life even before explicit water contact.
+- The force pass applies wind to `fire`, `ember`, `char`, `soot`, and blast fronts. Char is moved weakly as heavier smoldering debris, while soot follows wind more readily as a smoke-like aerosol.
+
+Regression coverage for combustion balance lives in `tests/test_combustion_stability.py`. It locks in gas anti-runaway thresholds, weak-air ignition gating, staged organic charring, dirty-fuel soot generation, moisture/humidity suppression, and wind coupling for combustion byproducts.

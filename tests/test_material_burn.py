@@ -31,26 +31,39 @@ class TestBurnRealism:
         """Blood is mostly water; it should not burn."""
         assert get_material(18).flammability == 0.0
 
-    def test_gas_is_highly_flammable(self):
-        """Gas is an explosive mixture; flammability must be near-max."""
+    def test_gas_is_controlled_fuel(self):
+        """Gas should ignite intentionally without slowly burning the atmosphere."""
         gas = get_material(10)
-        assert gas.flammability >= 0.9
+        assert 0.3 <= gas.flammability <= 0.5
         assert gas.phase_high_id == 4  # becomes fire
-        assert gas.phase_high_temp <= 130  # low ignition temp
+        assert gas.phase_high_temp >= 190
+        assert gas.oxygen_requirement >= 0.65
 
     def test_oil_burns_hotter_and_leaves_ember(self):
         oil = get_material(6)
-        assert oil.flammability >= 0.9
-        assert oil.burn_to == 33  # ember (not raw fire)
+        assert oil.flammability >= 0.75
+        assert oil.phase_high_temp >= 175
+        assert oil.oxygen_requirement >= 0.5
+        assert oil.burn_to == 58  # heavy smoke/soot residue
         assert oil.default_flame_temp == 96  # TEMP_AMBIENT: oil must not auto-ignite when placed
         assert oil.default_flame_life == 0
 
     def test_wood_chars_to_coal(self):
-        """Wood should phase-transition to coal (char) when hot, not straight to fire."""
+        """Wood remains configured for charring rather than straight raw fire."""
         wood = get_material(11)
         assert wood.phase_high_id == 36  # coal
         assert wood.burn_to == 36
         assert wood.default_flame_life > 0
+
+    def test_char_and_soot_materials_exist(self):
+        char = get_material(57)
+        soot = get_material(58)
+        assert char.name == "char"
+        assert soot.name == "soot"
+        assert 0.2 <= char.flammability <= 0.5
+        assert char.burn_to == 25  # ash
+        assert soot.flammability == 0.0
+        assert soot.phase_low_id == 25  # settles/cools to ash
 
     def test_plant_embers_first(self):
         plant = get_material(8)
@@ -74,6 +87,16 @@ class TestBurnRealism:
         napalm = get_material(37)
         assert napalm.burn_to == 33
         assert napalm.emissivity > 0.0
+
+    def test_napalm_has_soot_and_oxygen_reactions(self):
+        napalm = get_material(37)
+        slots = {
+            napalm.reaction_1_partner: napalm.reaction_1_product_self,
+            napalm.reaction_2_partner: napalm.reaction_2_product_self,
+            napalm.reaction_3_partner: napalm.reaction_3_product_self,
+        }
+        assert slots[4] == 58  # fire contact can produce soot
+        assert slots[32] == 4  # explicit oxygen sustains flame
 
     def test_glass_melts_to_lava(self):
         glass = get_material(12)

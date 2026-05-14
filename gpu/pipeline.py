@@ -411,6 +411,8 @@ class Pipeline:
                 # 1. State / reactions (no movement)
                 self.buffers.temp_a.bind_to_image(IMAGE_TEMPERATURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
                 self.buffers.temp_b.bind_to_image(IMAGE_TEMPERATURE_OUT, read=False, write=True, level=0, format=_FMT_R32F)
+                self.buffers.moisture_a.bind_to_image(IMAGE_MOISTURE_IN, read=True, write=False, level=0, format=_FMT_R32F)
+                self.buffers.humidity_a.bind_to_image(IMAGE_HUMIDITY_IN, read=True, write=False, level=0, format=_FMT_R32F)
                 self._set_common_uniforms(self.state_shader)
                 self._timed_run("state", self.state_shader, group_x=gx, group_y=gy, group_z=1)
                 self.ctx.memory_barrier()

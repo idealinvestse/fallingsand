@@ -68,6 +68,37 @@ class TestStatePass:
         if "nearVirus" in src:
             assert "bool nearVirus" in src, "nearVirus must be defined before use"
 
+    def test_fire_uses_moisture_and_weak_air_oxidizer(self):
+        src = _read("state_shader.glsl")
+        assert "moistureIn" in src
+        assert "weakAirOnly" in src
+        assert "explicitO2" in src
+
+    def test_state_shader_has_staged_combustion_materials(self):
+        src = _read("state_shader.glsl")
+        common = _read("common.glsl")
+        assert "T_CHAR" in common
+        assert "T_SOOT" in common
+        assert "writeCell(idx, p, T_CHAR" in src
+        assert "writeCell(idx, p, T_SOOT" in src
+
+    def test_state_shader_uses_oxygen_availability_for_byproducts(self):
+        src = _read("state_shader.glsl")
+        assert "oxygenAvailability" in src
+        assert "nearDirtyFuel" in src
+        assert "fireResidue" in src
+
+    def test_state_shader_uses_weather_humidity_for_fire_suppression(self):
+        src = _read("state_shader.glsl")
+        assert "humidityIn" in src
+        assert "wetSuppression" in src
+
+    def test_force_shader_wind_moves_combustion_byproducts(self):
+        src = _read("force_shader.glsl")
+        assert "T_CHAR" in src
+        assert "T_SOOT" in src
+        assert "windCoupling" in src
+
 
 class TestForcePass:
     def test_uses_gravity_and_dt(self):

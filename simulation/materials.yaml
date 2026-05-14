@@ -283,16 +283,16 @@
   color: [100, 80, 40]
   density: 1.5
   cat: 2
-  flamm: 0.90
+  flamm: 0.80
   k: 0.08
   phi_h: 4
-  Th: 150
+  Th: 185
   phi_l: 6
   Tl: 0
   cond: 0.0
   emit: 0.0
   cool: 0.015
-  bto: 33
+  bto: 58
   visc: 0.45
   turb: 0.08
   wd: 1
@@ -321,7 +321,7 @@
   rxn3_pn: 0
   rxn3_prob: 0.0
   rxn3_tt: 0
-  o2_req: 0.4
+  o2_req: 0.55
   o2_yield: 0.2
 
 7:
@@ -467,10 +467,10 @@
   color: [200, 255, 200]
   density: -0.2
   cat: 0
-  flamm: 0.95
+  flamm: 0.40
   k: 0.03
   phi_h: 4
-  Th: 120
+  Th: 200
   phi_l: 10
   Tl: 0
   cond: 0.0
@@ -505,7 +505,7 @@
   rxn3_pn: 0
   rxn3_prob: 0.0
   rxn3_tt: 0
-  o2_req: 0.4
+  o2_req: 0.70
   o2_yield: 0.3
 
 11:
@@ -1744,16 +1744,16 @@
   coh: 0.0
   rest: 0.0
   sf: 4
-  rxn1_p: 32
-  rxn1_ps: 4
+  rxn1_p: 4
+  rxn1_ps: 58
   rxn1_pn: 0
-  rxn1_prob: 0.4
-  rxn1_tt: 0
-  rxn2_p: 0
-  rxn2_ps: 0
+  rxn1_prob: 0.12
+  rxn1_tt: 170
+  rxn2_p: 32
+  rxn2_ps: 4
   rxn2_pn: 0
-  rxn2_prob: 0.0
-  rxn2_tt: 0
+  rxn2_prob: 0.35
+  rxn2_tt: 145
   rxn3_p: 0
   rxn3_ps: 0
   rxn3_pn: 0
@@ -2272,6 +2272,559 @@
   rxn1_ps: 3
   rxn1_pn: 14
   rxn1_prob: 1.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0.0
+  o2_yield: 0.0
+
+49:
+  name: magnet
+  color: [180, 180, 200]
+  density: 6.5
+  cat: 3
+  flamm: 0.0
+  k: 0.08
+  phi_h: 49
+  Th: 255
+  phi_l: 49
+  Tl: 0
+  cond: 0.6
+  emit: 0.0
+  cool: 0.005
+  bto: 49
+  visc: 1.0
+  turb: 0.0
+  wd: 0
+  dft: 96
+  dfl: 0
+  cp: 0.45
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0
+  rest: 0
+  sf: 3
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+50:
+  name: magnet_south
+  color: [160, 160, 220]
+  density: 6.5
+  cat: 3
+  flamm: 0.0
+  k: 0.08
+  phi_h: 50
+  Th: 255
+  phi_l: 50
+  Tl: 0
+  cond: 0.6
+  emit: 0.0
+  cool: 0.005
+  bto: 50
+  visc: 1.0
+  turb: 0.0
+  wd: 0
+  dft: 96
+  dfl: 0
+  cp: 0.45
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0
+  rest: 0
+  sf: 3
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+51:
+  name: plasma
+  color: [120, 200, 255]
+  density: -0.8
+  cat: 0
+  flamm: 0.0
+  k: 0.2
+  phi_h: 4
+  Th: 255
+  phi_l: 4
+  Tl: 80
+  cond: 0.8
+  emit: 1.0
+  cool: 0.02
+  bto: 4
+  visc: 0.0
+  turb: 0.75
+  wd: 0
+  dft: 240
+  dfl: 18
+  cp: 0.1
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0
+  rest: 0
+  sf: 4
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+52:
+  name: lightning_plasma
+  color: [180, 220, 255]
+  density: -0.9
+  cat: 0
+  flamm: 0.0
+  k: 0.25
+  phi_h: 4
+  Th: 255
+  phi_l: 4
+  Tl: 90
+  cond: 1.0
+  emit: 1.0
+  cool: 0.03
+  bto: 4
+  visc: 0.0
+  turb: 0.9
+  wd: 0
+  dft: 255
+  dfl: 8
+  cp: 0.08
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0
+  rest: 0
+  sf: 4
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+53:
+  name: glass_new
+  color: [190, 230, 255]
+  density: 6.0
+  cat: 3
+  flamm: 0.0
+  k: 0.08
+  phi_h: 9
+  Th: 240
+  phi_l: 53
+  Tl: 0
+  cond: 0.0
+  emit: 0.03
+  cool: 0.008
+  bto: 53
+  visc: 1.0
+  turb: 0.0
+  wd: 0
+  dft: 96
+  dfl: 0
+  cp: 0.4
+  mp: 240
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0
+  rest: 0
+  sf: 3
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+54:
+  name: obsidian
+  color: [25, 20, 35]
+  density: 7.5
+  cat: 3
+  flamm: 0.0
+  k: 0.1
+  phi_h: 9
+  Th: 255
+  phi_l: 54
+  Tl: 0
+  cond: 0.0
+  emit: 0.04
+  cool: 0.004
+  bto: 54
+  visc: 1.0
+  turb: 0.0
+  wd: 0
+  dft: 96
+  dfl: 0
+  cp: 0.5
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0
+  rest: 0
+  sf: 3
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+55:
+  name: thermite_enhanced
+  color: [255, 220, 80]
+  density: 3.5
+  cat: 1
+  flamm: 0.0
+  k: 0.45
+  phi_h: 55
+  Th: 255
+  phi_l: 25
+  Tl: 0
+  cond: 0.2
+  emit: 0.9
+  cool: 0.002
+  bto: 25
+  visc: 0.8
+  turb: 0.0
+  wd: 0
+  dft: 230
+  dfl: 0
+  cp: 0.3
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0.1
+  rest: 0
+  sf: 4
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+56:
+  name: acid_glass
+  color: [120, 255, 180]
+  density: 5.8
+  cat: 3
+  flamm: 0.0
+  k: 0.06
+  phi_h: 56
+  Th: 255
+  phi_l: 56
+  Tl: 0
+  cond: 0.0
+  emit: 0.02
+  cool: 0.01
+  bto: 56
+  visc: 1.0
+  turb: 0.0
+  wd: 0
+  dft: 96
+  dfl: 0
+  cp: 0.4
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0
+  rest: 0
+  sf: 3
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+59:
+  name: hot_ash
+  color: [120, 95, 75]
+  density: 2.0
+  cat: 1
+  flamm: 0.05
+  k: 0.06
+  phi_h: 33
+  Th: 180
+  phi_l: 25
+  Tl: 80
+  cond: 0.0
+  emit: 0.25
+  cool: 0.025
+  bto: 25
+  visc: 0.65
+  turb: 0.05
+  wd: 0
+  dft: 140
+  dfl: 20
+  cp: 0.22
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0.25
+  rest: 0.05
+  sf: 0
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0.35
+  o2_yield: 0.15
+
+60:
+  name: dead_air
+  color: [5, 5, 5]
+  density: -0.1
+  cat: 0
+  flamm: 0.0
+  k: 0.01
+  phi_h: 0
+  Th: 255
+  phi_l: 0
+  Tl: 0
+  cond: 0.0
+  emit: 0.0
+  cool: 0.04
+  bto: 0
+  visc: 0.0
+  turb: 0.0
+  wd: 0
+  dft: 96
+  dfl: 0
+  cp: 0.1
+  mp: 255
+  bp: 255
+  st: 0
+  sol: 0
+  coh: 0
+  rest: 0
+  sf: 2
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0
+  o2_yield: 0
+
+
+57:
+  name: char
+  color: [45, 32, 24]
+  density: 3.8
+  cat: 3
+  flamm: 0.35
+  k: 0.07
+  phi_h: 33
+  Th: 210
+  phi_l: 57
+  Tl: 0
+  cond: 0.0
+  emit: 0.18
+  cool: 0.01
+  bto: 25
+  visc: 1.0
+  turb: 0.0
+  wd: 0
+  dft: TEMP_AMBIENT
+  dfl: 0
+  cp: 0.45
+  mp: 255
+  bp: 255
+  st: 0.0
+  sol: 0.0
+  coh: 0.2
+  rest: 0.0
+  sf: 3
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
+  rxn1_tt: 0
+  rxn2_p: 0
+  rxn2_ps: 0
+  rxn2_pn: 0
+  rxn2_prob: 0.0
+  rxn2_tt: 0
+  rxn3_p: 0
+  rxn3_ps: 0
+  rxn3_pn: 0
+  rxn3_prob: 0.0
+  rxn3_tt: 0
+  o2_req: 0.55
+  o2_yield: 0.25
+
+58:
+  name: soot
+  color: [18, 18, 18]
+  density: -0.35
+  cat: 0
+  flamm: 0.0
+  k: 0.025
+  phi_h: 58
+  Th: 255
+  phi_l: 25
+  Tl: 70
+  cond: 0.0
+  emit: 0.0
+  cool: 0.035
+  bto: 25
+  visc: 0.0
+  turb: 0.45
+  wd: 0
+  dft: 120
+  dfl: 44
+  cp: 0.12
+  mp: 255
+  bp: 255
+  st: 0.0
+  sol: 0.0
+  coh: 0.0
+  rest: 0.0
+  sf: 2
+  rxn1_p: 0
+  rxn1_ps: 0
+  rxn1_pn: 0
+  rxn1_prob: 0.0
   rxn1_tt: 0
   rxn2_p: 0
   rxn2_ps: 0

@@ -59,6 +59,10 @@ const uint T_GLASS_NEW = 53u;
 const uint T_OBSIDIAN = 54u;
 const uint T_THERMITE_ENHANCED = 55u;
 const uint T_ACID_GLASS = 56u;
+const uint T_CHAR = 57u;
+const uint T_SOOT = 58u;
+const uint T_HOT_ASH = 59u;
+const uint T_DEAD_AIR = 60u;
 
 // ── Cell packing utilities ───────────────────────────────────────────────────
 uint getType (uint c){ return c & 0xFFu; }

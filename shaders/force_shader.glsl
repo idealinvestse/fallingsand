@@ -319,8 +319,9 @@ void main(){
     }
 
     // Wind bias for fire/ember
-    if((typ == T_FIRE || typ == T_EMBER || typ == T_BLAST) && length(windVector) > 0.01){
-        v += windVector * dt * 1.4;
+    if((typ == T_FIRE || typ == T_EMBER || typ == T_CHAR || typ == T_SOOT || typ == T_BLAST) && length(windVector) > 0.01){
+        float windCoupling = (typ == T_CHAR) ? 0.55 : ((typ == T_SOOT) ? 1.15 : 1.4);
+        v += windVector * dt * windCoupling;
     }
 
     // Turbulence

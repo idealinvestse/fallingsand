@@ -183,3 +183,9 @@ class TestPassGraphContract:
         assert "humidity_out" in w.writes
         assert "humidity" in w.swaps
         assert w.optional
+
+    def test_state_pass_reads_fire_suppression_fields(self):
+        passes = {pass_.name: pass_ for pass_ in default_step_passes()}
+        state = passes["state"]
+        assert "moisture_in" in state.reads
+        assert "humidity_in" in state.reads

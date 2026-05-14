@@ -41,7 +41,7 @@ DEFAULT_STEP_PASSES: tuple[ComputePass, ...] = (
     ComputePass(
         name="state",
         shader_key="state",
-        reads=("cells_read", "rules", "temperature_in"),
+        reads=("cells_read", "rules", "temperature_in", "moisture_in", "humidity_in"),
         writes=("cells_write", "temperature_out"),
         swaps=("cells", "temperature"),
     ),

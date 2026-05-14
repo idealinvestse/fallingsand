@@ -11,6 +11,8 @@ layout(std430, binding = 1) writeonly buffer WriteBuffer { uint cellsOut[]; };
 layout(r32f, binding = 11) uniform readonly image2D tempTex;
 layout(r32f, binding = 12) uniform writeonly image2D tempOut;
 layout(rg32f, binding = 3) uniform readonly image2D velIn;
+layout(r32f, binding = 15) uniform readonly image2D moistureIn;
+layout(r32f, binding = 17) uniform readonly image2D humidityIn;
 
 uniform uvec2 gridSize;
 uniform uint frame;
@@ -54,6 +56,9 @@ void main(){
     float ambientT = float(ambientTemp);
     float highT = r.TH;
     float lowT = r.TL;
+    float moisture = clamp(imageLoad(moistureIn, p).r / 500.0, 0.0, 1.0);
+    float humidity = clamp(imageLoad(humidityIn, p).r / 500.0, 0.0, 1.0);
+    float wetSuppression = clamp(max(moisture, humidity * 0.65), 0.0, 1.0);
 
     // Load neighbors
     uint n = loadCell(p + ivec2(0, 1));
@@ -62,6 +67,17 @@ void main(){
     uint w = loadCell(p + ivec2(-1, 0));
 
     uint tn = getType(n), ts = getType(s), te = getType(e), tw = getType(w);
+    int explicitO2Count = 0;
+    if(tn == T_OXYGEN) explicitO2Count++;
+    if(ts == T_OXYGEN) explicitO2Count++;
+    if(te == T_OXYGEN) explicitO2Count++;
+    if(tw == T_OXYGEN) explicitO2Count++;
+    int airCount = 0;
+    if(tn == T_AIR) airCount++;
+    if(ts == T_AIR) airCount++;
+    if(te == T_AIR) airCount++;
+    if(tw == T_AIR) airCount++;
+    float oxygenAvailability = clamp(float(explicitO2Count) * 0.35 + float(airCount) * 0.12, 0.0, 1.0);
 
     // ═══════════════════════════════════════════════════════════════════════════
     // THERMAL NOTE: Heat diffusion + Newton cooling + emissive radiation are
@@ -412,23 +428,37 @@ void main(){
         }
     } else if(nearHot){
         // Flammability-scaled heat gain: base 8 + flamm*20
-        // Oil (0.9) gets ~26/frame, gas (0.95) gets ~27, wood (0.7) gets ~22
+        // Oil (0.8) gets ~24/frame, gas (0.4) gets ~16, wood (0.7) gets ~22 before moisture damping
         // Non-flammable materials still get 8/frame from radiant heat
-        float heatGain = 8.0 + r.flamm * 20.0;
+        float heatGain = (8.0 + r.flamm * 20.0) * (1.0 - wetSuppression * 0.65);
         temp += heatGain;
         // Deterministic fire propagation: flammable cell touching fire/ember/spark
         // with sufficient temperature ignites directly (no low-probability hashing).
         // Skips fire/ember/blast itself and anything already reacted.
         // Materials with o2Req > 0 need at least one O2 or air neighbour to ignite.
         if(r.flamm > 0.0 && typ != T_FIRE && typ != T_EMBER && typ != T_BLAST && typ != T_SPARK
-           && temp >= max(0.0, highT - 6.0)){
+           && temp >= max(0.0, highT - 6.0 + wetSuppression * 32.0)){
             bool hasOxidizer = true;  // Default: allow ignition
             if(r.o2Req > 0.0){
-                // Need at least one O2 or air neighbour for combustion
-                hasOxidizer = (tn == T_OXYGEN || ts == T_OXYGEN || te == T_OXYGEN || tw == T_OXYGEN ||
-                               tn == T_AIR   || ts == T_AIR   || te == T_AIR   || tw == T_AIR);
+                bool weakAirOnly = (r.o2Req <= 0.75 && airCount >= 3) || (r.o2Req <= 0.55 && airCount >= 2) || (r.o2Req <= 0.35 && airCount >= 1);
+                bool strongIgnition = temp >= highT + 12.0 + wetSuppression * 24.0;
+                hasOxidizer = explicitO2Count > 0 || (weakAirOnly && strongIgnition);
             }
             if(hasOxidizer){
+                if(typ == T_WOOD || typ == T_PLANT || typ == T_SUGAR || typ == T_HONEY || typ == T_SAP){
+                    uint nl = 24u + uint(r.flamm * 40.0);
+                    writeCell(idx, p, T_CHAR, max(temp, highT), nl, 0u);
+                    return;
+                }
+                if(typ == T_OIL || typ == T_GAS || typ == T_NAPALM || typ == T_COAL){
+                    uint rnd = hash(idx ^ (frame * 23u));
+                    float sootProb = typ == T_GAS ? 0.08 : (typ == T_COAL ? 0.26 : (typ == T_NAPALM ? 0.22 : 0.18));
+                    sootProb *= mix(1.45, 0.45, oxygenAvailability);
+                    if(hashF(rnd) < sootProb * (1.0 - wetSuppression * 0.5)){
+                        writeCell(idx, p, T_SOOT, max(120.0, temp * 0.65), 28u + uint(24.0 * sootProb), 0u);
+                        return;
+                    }
+                }
                 uint nl = 20u + uint(r.flamm * 60.0);
                 uint igniteType = (r.cat == 2 || r.cat == 0) ? T_FIRE : T_EMBER;
                 writeCell(idx, p, igniteType, max(temp, highT), nl, 0u);
@@ -462,7 +492,7 @@ void main(){
     // STATE MACHINE: Phase transitions & decay
     // ═══════════════════════════════════════════════════════════════════════════
     // Life decrement runs here so cells spend a full frame at each life value
-    if(typ == T_FIRE || typ == T_SMOKE || typ == T_STEAM || typ == T_SPARK || typ == T_EMBER || typ == T_BLAST || typ == T_SHRAPNEL){
+    if(typ == T_FIRE || typ == T_SMOKE || typ == T_SOOT || typ == T_STEAM || typ == T_SPARK || typ == T_EMBER || typ == T_BLAST || typ == T_SHRAPNEL){
         if(life > 0u) life--;
     }
 
@@ -491,20 +521,14 @@ void main(){
 
     if(typ == T_FIRE){
         // Self-heating: fire temperature rises over time
-        temp += 4.0;
+        temp += 4.0 * (1.0 - wetSuppression * 0.75);
         // ── Oxygen-dependent combustion ────────────────────────────────────
         // Count O2 neighbours and consume them based on o2Req/o2Yield.
-        int o2Count = 0;
-        if(tn == T_OXYGEN) o2Count++;
-        if(ts == T_OXYGEN) o2Count++;
-        if(te == T_OXYGEN) o2Count++;
-        if(tw == T_OXYGEN) o2Count++;
-
-        if(o2Count > 0 && r.o2Req > 0.0){
+        if(explicitO2Count > 0 && r.o2Req > 0.0){
             // O2 available: sustain combustion
-            life = min(255u, life + 8u);
+            life = min(255u, life + uint(8.0 * (1.0 - wetSuppression * 0.75)));
             // Extra heat when well-fed
-            if(o2Count >= 2) temp += 4.0;
+            if(explicitO2Count >= 2) temp += 4.0 * (1.0 - wetSuppression * 0.75);
         } else {
             // No O2 nearby: suffocation
             bool hasAir = (tn == T_AIR || ts == T_AIR || te == T_AIR || tw == T_AIR);
@@ -513,8 +537,10 @@ void main(){
                 life = max(0u, life - 2u);
             }
         }
+        life = life > uint(wetSuppression * 6.0) ? life - uint(wetSuppression * 6.0) : 0u;
         if(life == 0u){
-            writeCell(idx, p, T_SMOKE, max(110.0, temp / 2.0), 20u, 0u);
+            uint fireResidue = oxygenAvailability < 0.25 ? T_SOOT : T_SMOKE;
+            writeCell(idx, p, fireResidue, max(110.0, temp / 2.0), fireResidue == T_SOOT ? 28u : 20u, 0u);
             return;
         }
     } else if(typ == T_SPARK){
@@ -522,7 +548,7 @@ void main(){
             writeCell(idx, p, T_FIRE, 220.0, 6u, 0u);
             return;
         }
-    } else if(typ == T_SMOKE){
+    } else if(typ == T_SMOKE || typ == T_SOOT){
         if(life == 0u){
             writeCell(idx, p, T_AIR, float(ambientTemp), 0u, 0u);
             return;
@@ -537,11 +563,18 @@ void main(){
         // Each O2 cell only writes to itself — no cross-cell races.
         bool nearFire = (tn == T_FIRE || ts == T_FIRE || te == T_FIRE || tw == T_FIRE ||
                          tn == T_EMBER || ts == T_EMBER || te == T_EMBER || tw == T_EMBER ||
+                         tn == T_CHAR || ts == T_CHAR || te == T_CHAR || tw == T_CHAR ||
                          tn == T_BLAST || ts == T_BLAST || te == T_BLAST || tw == T_BLAST);
         if(nearFire){
             uint rnd = hash(idx ^ frame);
+            bool nearDirtyFuel = (tn == T_OIL || ts == T_OIL || te == T_OIL || tw == T_OIL ||
+                                  tn == T_GAS || ts == T_GAS || te == T_GAS || tw == T_GAS ||
+                                  tn == T_COAL || ts == T_COAL || te == T_COAL || tw == T_COAL ||
+                                  tn == T_NAPALM || ts == T_NAPALM || te == T_NAPALM || tw == T_NAPALM ||
+                                  tn == T_SOOT || ts == T_SOOT || te == T_SOOT || tw == T_SOOT);
             if((rnd & 7u) == 0u){  // 1/8 chance per frame per O2 cell
-                writeCell(idx, p, T_SMOKE, temp, 15u, 0u);
+                uint product = (nearDirtyFuel && (rnd & 16u) == 0u) ? T_SOOT : T_SMOKE;
+                writeCell(idx, p, product, temp, product == T_SOOT ? 26u : 15u, 0u);
                 return;
             }
         }
@@ -553,23 +586,19 @@ void main(){
         }
     } else if(typ == T_EMBER){
         // Ember: burning debris that ignites neighbors
-        temp += 2.0;
+        temp += 2.0 * (1.0 - wetSuppression * 0.75);
         // ── Oxygen-dependent ember combustion ──────────────────────────────
-        int o2CountE = 0;
-        if(tn == T_OXYGEN) o2CountE++;
-        if(ts == T_OXYGEN) o2CountE++;
-        if(te == T_OXYGEN) o2CountE++;
-        if(tw == T_OXYGEN) o2CountE++;
-        if(o2CountE > 0 && r.o2Req > 0.0){
+        if(explicitO2Count > 0 && r.o2Req > 0.0){
             // O2 available: sustain ember combustion
-            life = min(255u, life + 4u);
-            if(o2CountE >= 2) temp += 2.0;
+            life = min(255u, life + uint(4.0 * (1.0 - wetSuppression * 0.75)));
+            if(explicitO2Count >= 2) temp += 2.0 * (1.0 - wetSuppression * 0.75);
         } else {
             bool hasAir = (tn == T_AIR || ts == T_AIR || te == T_AIR || tw == T_AIR);
             if(!hasAir){
                 life = max(0u, life - 1u);  // Suffocate slower than fire
             }
         }
+        life = life > uint(wetSuppression * 4.0) ? life - uint(wetSuppression * 4.0) : 0u;
         if(life == 0u || temp <= ambientT + 10.0){
             writeCell(idx, p, T_ASH, max(100.0, temp / 2.0), 0u, 0u);
             return;
@@ -579,6 +608,19 @@ void main(){
         if((rnd & 15u) == 0u){
             // Try to ignite a neighbor (simplified: just heat them)
             temp += 3.0; // Extra heat from ember
+        }
+    } else if(typ == T_CHAR){
+        if(temp >= highT && wetSuppression < 0.75){
+            bool hasOxidizer = (tn == T_OXYGEN || ts == T_OXYGEN || te == T_OXYGEN || tw == T_OXYGEN ||
+                                tn == T_AIR || ts == T_AIR || te == T_AIR || tw == T_AIR);
+            if(hasOxidizer){
+                writeCell(idx, p, T_EMBER, max(temp, highT), 36u, 0u);
+                return;
+            }
+        }
+        if(temp <= ambientT + 8.0 || wetSuppression > 0.8){
+            writeCell(idx, p, T_ASH, max(80.0, temp * 0.5), 0u, 0u);
+            return;
         }
     } else if(typ == T_FUSE){
         // Fuse: slow-burning solid that propagates to neighbors

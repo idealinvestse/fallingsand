@@ -69,13 +69,13 @@ class TestMaterialDefinitions:
             assert k >= 0.0, f"Material {mat_id} thermal conductivity is negative: {k}"
 
     def test_phase_transition_ids_valid(self):
-        """Test that phase transition IDs are valid material IDs (0..48)."""
+        """Test that phase transition IDs are valid material IDs."""
         for mat_id, props in PARTICLES.items():
             phi_h = props['phi_h']
             phi_l = props['phi_l']
 
-            assert 0 <= phi_h <= 48, f"Material {mat_id} phi_h is invalid: {phi_h}"
-            assert 0 <= phi_l <= 48, f"Material {mat_id} phi_l is invalid: {phi_l}"
+            assert 0 <= phi_h < NUM_TYPES, f"Material {mat_id} phi_h is invalid: {phi_h}"
+            assert 0 <= phi_l < NUM_TYPES, f"Material {mat_id} phi_l is invalid: {phi_l}"
 
     def test_phase_transition_temperatures_valid(self):
         """Test that phase transition temperatures are valid (allow >255)."""
@@ -108,10 +108,10 @@ class TestMaterialDefinitions:
             assert cool >= 0.0, f"Material {mat_id} cooling rate is negative: {cool}"
 
     def test_burn_to_id_valid(self):
-        """Test that burn_to ID is a valid material ID (0..48)."""
+        """Test that burn_to ID is a valid material ID."""
         for mat_id, props in PARTICLES.items():
             bto = props['bto']
-            assert 0 <= bto <= 48, f"Material {mat_id} burn_to is invalid: {bto}"
+            assert 0 <= bto < NUM_TYPES, f"Material {mat_id} burn_to is invalid: {bto}"
 
     def test_viscosity_range(self):
         """Test that viscosity is in range [0.0, 1.0]."""
