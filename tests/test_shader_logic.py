@@ -91,7 +91,7 @@ class TestStatePass:
     def test_state_shader_uses_weather_humidity_for_fire_suppression(self):
         src = _read("state_shader.glsl")
         assert "humidityIn" in src
-        assert "wetSuppression" in src
+        assert "effectiveWet" in src
 
     def test_force_shader_wind_moves_combustion_byproducts(self):
         src = _read("force_shader.glsl")

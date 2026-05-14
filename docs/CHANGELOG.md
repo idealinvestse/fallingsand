@@ -2,6 +2,21 @@
 
 Consolidated implementation history for the Falling Sand simulation.
 
+
+## v7.2 Combustion Polish & Fine-Tuning (2026-XX)
+
+### Per-Material Wet Combustion
+
+- Added `moisture_resistance`, `wet_ignition_penalty`, and `wet_burn_rate_multiplier` material fields.
+- Extended the material rule buffer to expose per-material wet behavior to shaders.
+- Updated state combustion logic so plant/wood are highly moisture-sensitive while coal/char/hot ash resist wet suppression better.
+
+### HotAsh, Char & Soot Polish
+
+- Increased HotAsh flammability and added hot-ash re-ignition behavior for adjacent fuels.
+- Added dedicated render paths for Char, Soot, and HotAsh so new combustion stages are visually distinct.
+- Expanded combustion stability tests to cover wet material properties, HotAsh re-ignition hooks, and byproduct rendering paths.
+
 ## v7.1 Combustion Overhaul (2026-XX)
 
 ### Realistic Combustion & Fire System

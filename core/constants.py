@@ -4,8 +4,8 @@
 NUM_TYPES = 61
 
 # Rule buffer stride (floats per material definition)
-# Actual count from to_rule_buffer: 49 floats per material
-RULE_STRIDE = 49
+# Actual count from to_rule_buffer: 64 floats per material
+RULE_STRIDE = 64
 
 # Ambient temperature (0-255 scale)
 TEMP_AMBIENT = 96

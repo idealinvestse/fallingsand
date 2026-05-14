@@ -68,6 +68,8 @@ void main(){
         if(typ == T_FIRE || typ == T_EMBER || typ == T_BLAST){
             // Warm noise for fire
             col += vec3(n * 0.8, n * 0.4, 0.0);
+        } else if(typ == T_SOOT){
+            col *= 0.65 + n * 2.0;
         } else if(typ == T_SMOKE || typ == T_GAS){
             // Cool noise for smoke
             col += vec3(n * 0.3);
@@ -99,6 +101,18 @@ void main(){
 
     if(typ == T_FIRE || typ == T_LAVA || typ == T_SPARK || typ == T_EMBER || typ == T_BLAST){
         glowStrength = max(glowStrength, tHot * (0.65 + rr.emit * 0.35));
+    }
+    if(typ == T_CHAR){
+        col = mix(col, vec3(0.02, 0.018, 0.015), 0.35);
+        glowStrength = max(glowStrength, tHot * 0.22);
+    }
+    if(typ == T_SOOT){
+        col = mix(col, vec3(0.006), 0.55);
+        glowStrength *= 0.25;
+    }
+    if(typ == T_HOT_ASH){
+        glowStrength = max(glowStrength, tHot * 0.55 + 0.12 * rr.emit);
+        col = mix(col, vec3(0.95, 0.22, 0.04), clamp(tHot * 0.45, 0.0, 0.45));
     }
 
     vec3 bb = blackbody(tempN);

@@ -108,6 +108,9 @@ class MaterialRegistry:
                 # Oxygen / combustion properties
                 oxygen_requirement=defs.get("o2_req", 0.0),
                 oxygen_yield=defs.get("o2_yield", 0.0),
+                moisture_resistance=defs.get("moisture_resistance", 0.0),
+                wet_ignition_penalty=defs.get("wet_ignition_penalty", 0.0),
+                wet_burn_rate_multiplier=defs.get("wet_burn_rate_multiplier", 1.0),
             )
 
     def _validate_materials(self) -> None:
@@ -141,6 +144,9 @@ class MaterialRegistry:
             _require_range(mat.name, mat.restitution, 0.0, 1.0)
             _require_range(mat.name, mat.oxygen_requirement, 0.0, 1.0)
             _require_range(mat.name, mat.oxygen_yield, 0.0, 1.0)
+            _require_range(mat.name, mat.moisture_resistance, 0.0, 1.0)
+            _require_range(mat.name, mat.wet_ignition_penalty, 0.0, 255.0)
+            _require_range(mat.name, mat.wet_burn_rate_multiplier, 0.0, 1.5)
 
             for partner, prod_self, prod_neighbor, prob, temp_threshold in (
                 (
@@ -261,6 +267,14 @@ class MaterialRegistry:
                     # Oxygen / combustion properties (2 floats)
                     m.oxygen_requirement,
                     m.oxygen_yield,
+                    # Reserved magnetic/plasma/glass properties expected by common.glsl
+                    0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0,
+                    0.0, 0.0, 0.0, 0.0,
+                    # Moisture / combustion properties
+                    m.moisture_resistance,
+                    m.wet_ignition_penalty,
+                    m.wet_burn_rate_multiplier,
                 ])
             else:
                 # Pad with zeros for undefined materials

@@ -31,7 +31,7 @@ The material rule buffer is an SSBO of `float32` values with:
 NUM_TYPES * RULE_STRIDE
 ```
 
-Current `RULE_STRIDE` is `49`.
+Current `RULE_STRIDE` is `64`.
 
 Layout groups:
 
@@ -40,6 +40,8 @@ Layout groups:
 - `26..40`: three reaction slots.
 - `41..46`: explosive properties.
 - `47..48`: oxygen/combustion properties.
+- `49..60`: reserved magnetic, plasma, and glass property slots.
+- `61..63`: per-material moisture combustion properties (`moisture_resistance`, `wet_ignition_penalty`, `wet_burn_rate_multiplier`).
 
 **Electrical Properties (slots 13-16):**
 - Slot 13: conductivity (0.0 = insulator, 1.0 = superconductor)
@@ -68,6 +70,25 @@ Temperature is not packed into the cell. It is stored in `r32f` textures.
 The authoritative temperature field is the double-buffered `temp_a`/`temp_b` texture pair in `gpu/buffers.py`.
 
 Save format v7 stores cell bytes and temperature bytes separately.
+
+
+### v7.2 Moisture Sensitivity Fields
+
+Each material can tune wet combustion independently:
+
+- `moisture_resistance` (`0.0..1.0`): how much local moisture/humidity is ignored. Dry plant matter should be low (`0.05..0.15`), while coal/thermite-like fuels can be high (`0.7+`).
+- `wet_ignition_penalty`: extra temperature required at full effective wetness. Sensitive organics use high penalties (`45..60`); resistant fuels use lower penalties (`10..25`).
+- `wet_burn_rate_multiplier`: burn/life sustain multiplier under wet conditions. Low values extinguish quickly; values near `1.0` keep burning when wet.
+
+Recommended custom fuel starting points:
+
+| Fuel type | moisture_resistance | wet_ignition_penalty | wet_burn_rate_multiplier |
+| --- | ---: | ---: | ---: |
+| dry grass/plant | 0.05 | 55 | 0.35 |
+| wood | 0.10 | 52 | 0.40 |
+| oil/gas | 0.25-0.35 | 34-42 | 0.65-0.75 |
+| char/hot ash | 0.40-0.55 | 24 | 0.70-0.75 |
+| coal | 0.75 | 20 | 0.90 |
 
 ## Combustion Stabilization
 

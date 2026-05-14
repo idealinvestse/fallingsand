@@ -58,7 +58,10 @@ void main(){
     float lowT = r.TL;
     float moisture = clamp(imageLoad(moistureIn, p).r / 500.0, 0.0, 1.0);
     float humidity = clamp(imageLoad(humidityIn, p).r / 500.0, 0.0, 1.0);
-    float wetSuppression = clamp(max(moisture, humidity * 0.65), 0.0, 1.0);
+    float wetExposure = clamp(max(moisture, humidity * 0.65), 0.0, 1.0);
+    float effectiveWet = clamp(wetExposure * (1.0 - r.moistureResist), 0.0, 1.0);
+    float wetIgnitionBoost = effectiveWet * r.wetIgnitionPenalty;
+    float wetBurnFactor = mix(1.0, r.wetBurnRate, effectiveWet);
 
     // Load neighbors
     uint n = loadCell(p + ivec2(0, 1));
@@ -430,18 +433,18 @@ void main(){
         // Flammability-scaled heat gain: base 8 + flamm*20
         // Oil (0.8) gets ~24/frame, gas (0.4) gets ~16, wood (0.7) gets ~22 before moisture damping
         // Non-flammable materials still get 8/frame from radiant heat
-        float heatGain = (8.0 + r.flamm * 20.0) * (1.0 - wetSuppression * 0.65);
+        float heatGain = (8.0 + r.flamm * 20.0) * (1.0 - effectiveWet * 0.65);
         temp += heatGain;
         // Deterministic fire propagation: flammable cell touching fire/ember/spark
         // with sufficient temperature ignites directly (no low-probability hashing).
         // Skips fire/ember/blast itself and anything already reacted.
         // Materials with o2Req > 0 need at least one O2 or air neighbour to ignite.
         if(r.flamm > 0.0 && typ != T_FIRE && typ != T_EMBER && typ != T_BLAST && typ != T_SPARK
-           && temp >= max(0.0, highT - 6.0 + wetSuppression * 32.0)){
+           && temp >= max(0.0, highT - 6.0 + wetIgnitionBoost)){
             bool hasOxidizer = true;  // Default: allow ignition
             if(r.o2Req > 0.0){
                 bool weakAirOnly = (r.o2Req <= 0.75 && airCount >= 3) || (r.o2Req <= 0.55 && airCount >= 2) || (r.o2Req <= 0.35 && airCount >= 1);
-                bool strongIgnition = temp >= highT + 12.0 + wetSuppression * 24.0;
+                bool strongIgnition = temp >= highT + 12.0 + wetIgnitionBoost * 0.75;
                 hasOxidizer = explicitO2Count > 0 || (weakAirOnly && strongIgnition);
             }
             if(hasOxidizer){
@@ -454,7 +457,7 @@ void main(){
                     uint rnd = hash(idx ^ (frame * 23u));
                     float sootProb = typ == T_GAS ? 0.08 : (typ == T_COAL ? 0.26 : (typ == T_NAPALM ? 0.22 : 0.18));
                     sootProb *= mix(1.45, 0.45, oxygenAvailability);
-                    if(hashF(rnd) < sootProb * (1.0 - wetSuppression * 0.5)){
+                    if(hashF(rnd) < sootProb * (1.0 - effectiveWet * 0.5)){
                         writeCell(idx, p, T_SOOT, max(120.0, temp * 0.65), 28u + uint(24.0 * sootProb), 0u);
                         return;
                     }
@@ -521,14 +524,14 @@ void main(){
 
     if(typ == T_FIRE){
         // Self-heating: fire temperature rises over time
-        temp += 4.0 * (1.0 - wetSuppression * 0.75);
+        temp += 4.0 * (1.0 - effectiveWet * 0.75);
         // ── Oxygen-dependent combustion ────────────────────────────────────
         // Count O2 neighbours and consume them based on o2Req/o2Yield.
         if(explicitO2Count > 0 && r.o2Req > 0.0){
             // O2 available: sustain combustion
-            life = min(255u, life + uint(8.0 * (1.0 - wetSuppression * 0.75)));
+            life = min(255u, life + uint(8.0 * (1.0 - effectiveWet * 0.75) * wetBurnFactor));
             // Extra heat when well-fed
-            if(explicitO2Count >= 2) temp += 4.0 * (1.0 - wetSuppression * 0.75);
+            if(explicitO2Count >= 2) temp += 4.0 * (1.0 - effectiveWet * 0.75);
         } else {
             // No O2 nearby: suffocation
             bool hasAir = (tn == T_AIR || ts == T_AIR || te == T_AIR || tw == T_AIR);
@@ -537,7 +540,7 @@ void main(){
                 life = max(0u, life - 2u);
             }
         }
-        life = life > uint(wetSuppression * 6.0) ? life - uint(wetSuppression * 6.0) : 0u;
+        life = life > uint(effectiveWet * 6.0 * (2.0 - wetBurnFactor)) ? life - uint(effectiveWet * 6.0 * (2.0 - wetBurnFactor)) : 0u;
         if(life == 0u){
             uint fireResidue = oxygenAvailability < 0.25 ? T_SOOT : T_SMOKE;
             writeCell(idx, p, fireResidue, max(110.0, temp / 2.0), fireResidue == T_SOOT ? 28u : 20u, 0u);
@@ -586,19 +589,19 @@ void main(){
         }
     } else if(typ == T_EMBER){
         // Ember: burning debris that ignites neighbors
-        temp += 2.0 * (1.0 - wetSuppression * 0.75);
+        temp += 2.0 * (1.0 - effectiveWet * 0.75);
         // ── Oxygen-dependent ember combustion ──────────────────────────────
         if(explicitO2Count > 0 && r.o2Req > 0.0){
             // O2 available: sustain ember combustion
-            life = min(255u, life + uint(4.0 * (1.0 - wetSuppression * 0.75)));
-            if(explicitO2Count >= 2) temp += 2.0 * (1.0 - wetSuppression * 0.75);
+            life = min(255u, life + uint(4.0 * (1.0 - effectiveWet * 0.75) * wetBurnFactor));
+            if(explicitO2Count >= 2) temp += 2.0 * (1.0 - effectiveWet * 0.75);
         } else {
             bool hasAir = (tn == T_AIR || ts == T_AIR || te == T_AIR || tw == T_AIR);
             if(!hasAir){
                 life = max(0u, life - 1u);  // Suffocate slower than fire
             }
         }
-        life = life > uint(wetSuppression * 4.0) ? life - uint(wetSuppression * 4.0) : 0u;
+        life = life > uint(effectiveWet * 4.0 * (2.0 - wetBurnFactor)) ? life - uint(effectiveWet * 4.0 * (2.0 - wetBurnFactor)) : 0u;
         if(life == 0u || temp <= ambientT + 10.0){
             writeCell(idx, p, T_ASH, max(100.0, temp / 2.0), 0u, 0u);
             return;
@@ -610,7 +613,7 @@ void main(){
             temp += 3.0; // Extra heat from ember
         }
     } else if(typ == T_CHAR){
-        if(temp >= highT && wetSuppression < 0.75){
+        if(temp >= highT && effectiveWet < 0.75){
             bool hasOxidizer = (tn == T_OXYGEN || ts == T_OXYGEN || te == T_OXYGEN || tw == T_OXYGEN ||
                                 tn == T_AIR || ts == T_AIR || te == T_AIR || tw == T_AIR);
             if(hasOxidizer){
@@ -618,8 +621,26 @@ void main(){
                 return;
             }
         }
-        if(temp <= ambientT + 8.0 || wetSuppression > 0.8){
+        if(temp <= ambientT + 8.0 || effectiveWet > 0.8){
             writeCell(idx, p, T_ASH, max(80.0, temp * 0.5), 0u, 0u);
+            return;
+        }
+    } else if(typ == T_HOT_ASH){
+        temp += 1.5 * (1.0 - effectiveWet * 0.6);
+        if(temp >= highT && effectiveWet < 0.7 && oxygenAvailability > 0.2){
+            uint rnd = hash(idx ^ (frame * 41u));
+            bool adjacentFuel = false;
+            for(int i = 0; i < 4; i++){
+                Rule nr = getRule(neighbors[i], ruleStride);
+                adjacentFuel = adjacentFuel || (nr.flamm > 0.0 && neighbors[i] != T_FIRE && neighbors[i] != T_EMBER);
+            }
+            if(adjacentFuel && (rnd & 31u) == 0u){
+                writeCell(idx, p, T_EMBER, max(temp, highT), 18u, 0u);
+                return;
+            }
+        }
+        if(temp <= ambientT + 12.0 || effectiveWet > 0.85){
+            writeCell(idx, p, T_ASH, max(85.0, temp * 0.5), 0u, 0u);
             return;
         }
     } else if(typ == T_FUSE){

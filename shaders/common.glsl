@@ -124,6 +124,9 @@ struct Rule {
     // Oxygen / combustion properties
     float o2Req;    // Oxygen requirement to sustain combustion
     float o2Yield;  // Oxygen consumed per combustion tick
+    float moistureResist; // Resistance to wet combustion suppression
+    float wetIgnitionPenalty; // Extra ignition temperature when wet
+    float wetBurnRate; // Burn rate multiplier when wet
     // Magnetic properties (4 floats)
     float magPol;   // Magnetic polarity (-1 to 1)
     float magPerm;  // Magnetic permeability
@@ -196,6 +199,10 @@ Rule getRule(uint tp, uint stride){
     // Oxygen / combustion properties (offset 47)
     r.o2Req    = rules[o+47u];
     r.o2Yield  = rules[o+48u];
+    // Moisture / combustion properties (offset 61-63)
+    r.moistureResist = rules[o+61u];
+    r.wetIgnitionPenalty = rules[o+62u];
+    r.wetBurnRate = rules[o+63u];
     // Magnetic properties (offset 49-52)
     r.magPol   = rules[o+49u];
     r.magPerm  = rules[o+50u];

@@ -6,7 +6,7 @@ Multi-pass GPU pipeline: materials, thermal state, liquid behavior, pressure/vel
 
 ## Current Version
 
-**v7.1 Combustion Overhaul** — Realistic staged burning, weather suppression, and stable fuel propagation.
+**v7.2 Combustion Polish** — Per-material wet combustion, HotAsh balance, and staged-fire rendering polish.
 
 ### Combustion Overhaul Highlights
 
@@ -15,7 +15,8 @@ Multi-pass GPU pipeline: materials, thermal state, liquid behavior, pressure/vel
 - **Richer byproducts**: added `char` and `soot`, with dirty-fuel soot production tied to local oxygen availability
 - **Weather integration**: moisture and humidity suppress heat gain, ignition, and fire/ember lifetime
 - **Wind integration**: fire, embers, char, and soot respond to wind with material-specific coupling
-- **Regression coverage**: dedicated combustion stability tests lock in anti-runaway and byproduct behavior
+- **Per-material wet behavior**: fuels now define moisture resistance, wet ignition penalty, and wet burn-rate response
+- **Regression coverage**: dedicated combustion stability tests lock in anti-runaway, wet-fuel, HotAsh, and byproduct behavior
 
 See `docs/CHANGELOG.md` for complete implementation history.
 
@@ -27,7 +28,7 @@ The project separates user-facing version labels from internal compatibility ver
 - **Save format**: `FSND` v7 (legacy) and `FSND` v8 (chunked binary with CRC32).
 - **Cell layout**: `type[0..7] | life[8..15] | flags[16..23] | unused[24..31]`.
 - **Temperature storage**: `r32f` float textures are the authoritative temperature store.
-- **Material rule stride**: `RULE_STRIDE = 49`.
+- **Material rule stride**: `RULE_STRIDE = 64`.
 
 See `docs/SAVE_FORMAT.md`, `docs/MATERIALS.md`, and `docs/GPU_PIPELINE.md` for implementation details.
 

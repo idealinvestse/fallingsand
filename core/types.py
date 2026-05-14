@@ -80,6 +80,9 @@ class Material:
     # Oxygen / combustion properties
     oxygen_requirement: float  # 0-1, how much O2 this material needs to sustain combustion
     oxygen_yield: float  # 0-1, how much O2 is consumed per combustion tick
+    moisture_resistance: float = 0.0  # 0-1, resistance to wet fire suppression
+    wet_ignition_penalty: float = 0.0  # extra temperature needed when wet
+    wet_burn_rate_multiplier: float = 1.0  # fire life/heat multiplier when wet
 
 
 @dataclass(slots=True)

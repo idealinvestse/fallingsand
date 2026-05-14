@@ -75,6 +75,9 @@ class ChemistryProps:
     burn_to: str = ""
     oxygen_requirement: float = 0.0
     oxygen_yield: float = 0.0
+    moisture_resistance: float = 0.0
+    wet_ignition_penalty: float = 0.0
+    wet_burn_rate_multiplier: float = 1.0
     reactions: list[ReactionDef] = field(default_factory=list)
 
 
@@ -266,6 +269,9 @@ def load_materials_v6(path: str | Path) -> dict[int, MaterialDefV6]:
             burn_to=_get_str(chem_raw, "burn_to"),
             oxygen_requirement=_get_float(chem_raw, "oxygen_requirement"),
             oxygen_yield=_get_float(chem_raw, "oxygen_yield"),
+            moisture_resistance=_get_float(chem_raw, "moisture_resistance"),
+            wet_ignition_penalty=_get_float(chem_raw, "wet_ignition_penalty"),
+            wet_burn_rate_multiplier=_get_float(chem_raw, "wet_burn_rate_multiplier", 1.0),
             reactions=_parse_reactions(chem_raw.get("reactions", [])),
         )
 
@@ -456,6 +462,9 @@ def to_legacy_defs(v6_materials: dict[int, MaterialDefV6]) -> dict[int, dict[str
             "sw_spd": ex.shockwave_speed,
             "o2_req": c.oxygen_requirement,
             "o2_yield": c.oxygen_yield,
+            "moisture_resistance": c.moisture_resistance,
+            "wet_ignition_penalty": c.wet_ignition_penalty,
+            "wet_burn_rate_multiplier": c.wet_burn_rate_multiplier,
             "mag_pol": mag.polarity,
             "mag_perm": mag.permeability,
             "mag_coerc": mag.coercivity,

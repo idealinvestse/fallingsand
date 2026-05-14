@@ -52,10 +52,32 @@ class TestMoistureWeatherSuppression:
         src = (ROOT / "shaders" / "state_shader.glsl").read_text(encoding="utf-8")
         assert "moistureIn" in src
         assert "humidityIn" in src
-        assert "wetSuppression" in src
-        assert "wetSuppression * 32.0" in src
+        assert "effectiveWet" in src
+        assert "wetIgnitionBoost" in src
 
     def test_wind_affects_fire_and_byproducts(self):
         src = (ROOT / "shaders" / "force_shader.glsl").read_text(encoding="utf-8")
         assert "T_FIRE || typ == T_EMBER || typ == T_CHAR || typ == T_SOOT" in src
         assert "windCoupling" in src
+
+
+class TestMoistureMaterialProperties:
+    def test_wood_is_more_moisture_sensitive_than_coal(self):
+        wood = get_material(11)
+        coal = get_material(36)
+        assert wood.moisture_resistance < coal.moisture_resistance
+        assert wood.wet_ignition_penalty > coal.wet_ignition_penalty
+        assert wood.wet_burn_rate_multiplier < coal.wet_burn_rate_multiplier
+
+    def test_hot_ash_can_reignite_after_balance_pass(self):
+        hot_ash = get_material(59)
+        assert 0.15 <= hot_ash.flammability <= 0.25
+        src = (ROOT / "shaders" / "state_shader.glsl").read_text(encoding="utf-8")
+        assert "typ == T_HOT_ASH" in src
+        assert "adjacentFuel" in src
+
+    def test_new_byproducts_have_rendering_paths(self):
+        src = (ROOT / "shaders" / "render_shader.glsl").read_text(encoding="utf-8")
+        assert "typ == T_CHAR" in src
+        assert "typ == T_SOOT" in src
+        assert "typ == T_HOT_ASH" in src
